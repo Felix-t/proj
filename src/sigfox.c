@@ -1,5 +1,6 @@
 #include "headers.h"
 #include "sigfox.h"
+#include "cfg.h"
 #include <termios.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -9,6 +10,8 @@ static uint8_t build_message(uint8_t msg[12], uint32_t t, float val1, float val2
 static time_t get_ref_time();
 static uint8_t set_interface_attribs (int fd, int speed, int parity);
 static uint8_t set_blocking (int fd, int should_block);
+static void parse_downlink(uint8_t *msg_received);
+static void receive_downlink(int fd, uint8_t *msg_received);
 
 
 static uint8_t set_interface_attribs (int fd, int speed, int parity)
@@ -112,6 +115,78 @@ static time_t get_ref_time()
 	return mktime(tmp);
 }
 
+static void receive_downlink(int fd, uint8_t *msg_received)
+{
+	uint8_t i,bytes_rcv,  save = 0, bytes_ack = 0;
+	uint8_t rcv_msg[100];
+	write(fd, "+++", 3);
+	sleep(2);
+	write(fd, "ATS000=d0\n", 10);
+	sleep(2);
+	write(fd, "ATQ\n", 4);
+	sleep(2);
+	write(fd, "ACK", 3);
+	sleep(DOWNLINK_TIMEOUT);
+	printf("Checking for Aknowledgment... \n");
+	do
+	{
+		bytes_rcv = read(fd, rcv_msg, 100);
+
+		for(i=0 ; i<bytes_rcv ; i++)
+		{
+			if(save)
+				msg_received[bytes_ack++] = rcv_msg[i];
+
+			else if(i > 1 
+					&& rcv_msg[i-2] == 'A' 
+					&& rcv_msg[i-1] == 'C' 
+					&& rcv_msg[i] == 'K')
+				save = 1;
+
+		}
+	}while(bytes_rcv != 0);
+	sleep(2);
+	write(fd, "+++", 3);
+	sleep(2);
+	write(fd, "ATS000=50\n", 10);
+	sleep(2);
+	write(fd, "ATQ\n", 4);
+	sleep(2);
+}
+
+static void parse_downlink(uint8_t *msg_received)
+{
+	char cfg_str[100] = "";
+	float tmp;
+	double cfg_val;
+	switch(msg_received[0]){
+	case 0:
+		strcat(cfg_str, "ACQ_TIME");
+		break;
+	case 1:
+		strcat(cfg_str, "MIN_VOLT");
+		break;
+	case 2:
+		strcat(cfg_str, "MIN_VOLT");
+		break;
+	case 3:
+		strcat(cfg_str, "THRESHOLD");
+		break;
+	case 4:
+		strcat(cfg_str, "freq_echantillonnage");
+		break;
+	case 5:
+		strcat(cfg_str, "zeros");
+		break;
+	default:
+		strcat(cfg_str, "ACQ_TIME");
+		break;
+	}
+	memcpy(&tmp, &msg_received[1], 4);
+	cfg_val = tmp;
+	set_cfg((char **) &cfg_str, &cfg_val, 1);
+
+}
 
 void *sigfox(void* args)
 {
@@ -136,7 +211,7 @@ void *sigfox(void* args)
 		pthread_exit((void *) 0);
 	}
 	set_interface_attribs (fd, B19200, 0);  // set speed to 19,200 bps, 8n1 (no parity)
-	set_blocking (fd, 1);                // set no blocking
+	set_blocking (fd, 0);                // set no blocking
 
 
 	if((messages[0] = malloc(MAX_NB_MSG*SIZE_SIGFOX_MSG)) == NULL)
@@ -157,7 +232,10 @@ void *sigfox(void* args)
 	}
 	
 	// @TODO : receive downlink message
-	
+	uint8_t msg_downlink[8];
+	receive_downlink(fd, msg_downlink);
+	parse_downlink(msg_downlink);
+
 	alive[SGF] = 1;
 
 	sgf_msg.write_allowed = 1;

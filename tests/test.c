@@ -19,7 +19,7 @@ int main()
 	FILE *fp = fopen("log_test", "a");
 
 	char *portname = "/dev/ttyUSB0";
-	uint8_t in_messages[8];
+	uint8_t in_messages[100];
 	uint8_t out_messages[9][12] = {
 		{0,1,2,3,4,5,6,7,8,9,10,11},
 		{'+','+','+'},
@@ -47,16 +47,14 @@ int main()
 	printf("Config done, trying to send message 2:\n");
 	write(fd, out_messages[4], 12);
 	sleep(60);
-	while(u != 0)
-	{
-		u = read(fd, in_messages, 8);
+	//while(u != 0)
+	//{
+		u = read(fd, in_messages, 100);
 
-		printf("c\n");
-		printf("u : %i\n", u);
 		for(i=0;i<u;i++)
-			fprintf(fp, "%hhx\t", in_messages[i]);
+			fprintf(fp, "i : %i,val : %hhx\t", i, in_messages[i]);
 		fprintf(fp, "\n");
-	}
+	//}
 	fclose(fp);
 	printf("Message 2 sent, config :\n");
 	write(fd, out_messages[5], 3);
@@ -66,7 +64,7 @@ int main()
 	write(fd, out_messages[7], 4);
 	sleep(30);
 	printf("Config done, trying to send message received :\n");
-	write(fd, in_messages, 8);
+	write(fd, &in_messages[u-8], 8);
 
 	printf("All out_messages sent\n");
 }
