@@ -1,0 +1,6 @@
+test1 = 12.0;
+test2 = 125.0;
+test3 = 1125.0;
+string = "abc";
+path_acc_data = "data_acc.txt";
+path_LMX2_data = "data_wlx2.txt";
