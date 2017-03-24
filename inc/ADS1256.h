@@ -1,3 +1,9 @@
+#ifndef ADS1256_H
+#define ADS1256_H
+
+
+#include "headers.h"
+#include "util.h"
 /*
  * ad_converter.h:
  *	Program launched on startup 
@@ -26,11 +32,6 @@
 
 #define RST_1() 	bcm2835_gpio_write(RST,HIGH);
 #define RST_0() 	bcm2835_gpio_write(RST,LOW);
-
-#define CH_NUM 0
-#define NB_ITERATION 10
-#define ITERATION_TIME 1 	//every X sec
-#define SLEEP_TIME 5 		//Between each series of data
 
 
 
@@ -117,3 +118,5 @@ void ADS1256_ISR(void);
 uint8_t ADS1256_Scan(void);
 
 
+
+#endif

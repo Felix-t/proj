@@ -4,25 +4,31 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <pthread.h>
+#include <bcm2835.h>
 
-static void *test()
+#include <math.h>
+uint8_t i = 0;
+#define NB_MEASURES 500
+#define MEASURE_FREQUENCY 370
+
+enum instrument {ACC,GYR,MAG} ;
+
+static double set_scale(enum instrument inst, double new_scale)
 {
-	sleep(5);
-	printf("ID : %i\n", pthread_self());
-	pthread_exit((void *) 1);
+	printf("%i\n", inst);
 }
-
 
 int main()
 {
-	const char *path = "grosfichier.txt";	
-	FILE *fp;
-	int i;
-	if(fp = fopen(path, "a"))
-	{
-		for(i=0;i<100000000;i++)
-		{
-			fprintf(fp, "0%i,%i,%i,%i,%i,%i\n",i,i,i,i,i,i);
-		}
-	}
+	char regaddr = 0x21;
+	uint8_t buf[1];
+	bcm2835_init();
+	bcm2835_i2c_begin();
+	printf("ABC");
+	bcm2835_i2c_setSlaveAddress(0x1D);
+	printf("DEF");
+	bcm2835_i2c_read_register_rs(&regaddr, buf, 1);
+	printf("\n %u \n", buf[0]);
+	bcm2835_i2c_end();
+	bcm2835_close();
 }

@@ -14,13 +14,7 @@
  * 		instruments via une interface ? ou hard coded comme maintenant
  */
 
-
-#include "include.h"
-
-#include "bcm2835.h"
 #include "accelerometer.h"
-#include "cfg.h"
-
 static uint8_t get_axes_data(uint8_t *data, int16_t * buffer, double scale);
 static uint8_t writeReg(uint8_t device_address, uint8_t reg, uint8_t *value);
 static uint8_t readReg(uint8_t device_address, uint8_t reg, uint8_t *value);
@@ -38,9 +32,8 @@ static uint8_t get_axes_data(uint8_t *data, int16_t * buffer, double scale)
 	// 6 registers containing data : 8msb x, 8 lsb x, 8 msb y, ...
 	for(i = 0; i < 3;i++)
 	{
-		buffer[i] = (int16_t) (data[2*i] | data[2*i+1] << 8);
+		buffer[i] = (int16_t) (data[2*i] | (data[2*i+1] << 8));
 		buffer[i] *= scale;
-
 	}
 	return 1;
 
@@ -99,16 +92,14 @@ static uint8_t writeReg(uint8_t device_address, uint8_t reg, uint8_t *value)
 static uint8_t readReg(uint8_t device_address, uint8_t reg, uint8_t *value)
 {
 	uint32_t i;
-	size_t length = sizeof(value);
+	size_t length = 6;
 	uint8_t return_code;
 
 	// If MSB of the reg adress = 1, multiple read
 	if (length > 1)
 		reg = reg | 128;
-
 	bcm2835_i2c_setSlaveAddress(device_address);
-
-	return_code = bcm2835_i2c_write_read_rs(&reg, 1, value, length);
+	return_code = bcm2835_i2c_read_register_rs(&reg, value, length);
 	switch(return_code){
 		case BCM2835_I2C_REASON_ERROR_NACK:
 			printf("Non acknowledge");
@@ -125,88 +116,98 @@ static uint8_t readReg(uint8_t device_address, uint8_t reg, uint8_t *value)
 	}
 	return return_code;
 }
+static scale_config *get_scale()
+{
+	static scale_config scale[3];
+	if(scale[0].value == 0.0)
+	{
+		scale[ACC] = SCALE_ACC_4G;
+		scale[GYR] = SCALE_GYR_245DPS;
+		scale[MAG] = SCALE_MAG_2GAUSS;
+	}	
+	//[3] = {SCALE_ACC_4G,
+	//SCALE_GYR_245DPS,
+	//SCALE_MAG_4GAUSS};
 
-/* Function : Change or get the scale for the specified LSM9D0 instrument
- * 	Don't change the scale without reconfiguring the LSM9D0 hardware
- * Params : uint8_t set = 1 to change the scale, = 0 to get the current one
- * 	uint8_t instrument : 0 is accelerometer, 1 is gyrometer, 2 magnetometer
+	return scale;
+}
+/* Function : Set the scale for the specified LSM9D0 instrument
+ * 	The hardware needs to be reconfigured with setup() afterwards	
+ * Params :  * 	uint8_t instrument : 0 is accelerometer, 1 is gyrometer, 2 magnetometer
  * 	double new_scale is the new scale value for the specified instrument
  * 		See possible choices in accelerometer.h
  * Return : The current scale value for the specified instrument
-*/
-static double set_get_scale(uint8_t set, uint8_t instrument, double new_scale)
+ */
+static double set_scale(enum instrument inst, scale_config new_scale)
 {
-	static double scale[3] = {SCALE_ACC_4G,
-		SCALE_GYR_245DPS,
-		SCALE_MAG_4GAUSS};
-
-	if(set)
-		scale[instrument] = new_scale;
-	return scale[instrument];
-
+	if(inst != ACC || inst != GYR || inst != MAG)
+		return 0;
+	scale_config *scale = get_scale();
+	//scale[inst] = new_scale; must be done member by member ? probably
 }
-uint8_t read_all(int16_t *buffer[3], double scale)
+
+uint8_t read_all(int16_t **buffer)
 {
-	if (!read_accelerometer(buffer[0],scale))
+	if (!read_accelerometer(buffer[0]))
 	{
-		printf("Accelerometer initialization error");
+		printf("Accelerometer read error");
 		return 0;
 	}
-	if (!read_gyrometer(buffer[1], scale))
+	if (!read_gyrometer(buffer[1]))
 	{
-		printf("Gyrometer initialization error");
+		printf("Gyrometer read error");
 		return 0;
 	}
-	if (MAG_ACQ && !read_magnetometer(buffer[2], scale))
+	if (MAG_ACQ && !read_magnetometer(buffer[2]))
 	{
-		printf("Magnetometer initialization error");
+		printf("Magnetometer read error");
 		return 0;
 	}
 
 	return 1;
 }
 
-uint8_t read_gyrometer(int16_t *buffer, double scale)
+uint8_t read_accelerometer(int16_t *buffer)
 {
 	uint8_t i;
-	if(scale == 0)
-		scale = SCALE_GYR_245DPS;
 
-	// 6 registers containing data : 8msb x, 8 lsb x, 8 msb y, ...
-	uint8_t data[6];
-	if(readReg(GYR_ADDRESS, OUT_X_L_G, data) == BCM2835_I2C_REASON_OK)
-	{
-		return get_axes_data(data, buffer, scale);
-	}
-	return 0;
-}
-
-uint8_t read_magnetometer(int16_t *buffer, double scale)
-{
-	uint8_t i;
-	if(scale == 0)
-		scale  = SCALE_MAG_2GAUSS;
-
-	// 6 registers containing data : 8msb x, 8 lsb x, 8 msb y, ...
-	uint8_t data[6];
-	if(readReg(MAG_ADDRESS, OUT_X_L_M, data) == BCM2835_I2C_REASON_OK)
-	{
-		return get_axes_data(data, buffer, scale);
-	}
-	return 0;
-}
-
-uint8_t read_accelerometer(int16_t *buffer, double scale)
-{
-	uint8_t i;
-	if(scale == 0)
-		scale  = SCALE_MAG_2GAUSS;
+	float scale_value = get_scale()[ACC].value;
 
 	// 6 registers containing data : 8msb x, 8 lsb x, 8 msb y, ...
 	uint8_t data[6];
 	if(readReg(ACC_ADDRESS, OUT_X_L_A, data) == BCM2835_I2C_REASON_OK)
 	{
-		return get_axes_data(data, buffer, scale);
+		return get_axes_data(data, buffer, scale_value);
+	}
+	return 0;
+}
+
+uint8_t read_gyrometer(int16_t *buffer)
+{
+	uint8_t i;
+
+	float scale_value = get_scale()[GYR].value;
+
+	// 6 registers containing data : 8msb x, 8 lsb x, 8 msb y, ...
+	uint8_t data[6];
+	if(readReg(GYR_ADDRESS, OUT_X_L_G, data) == BCM2835_I2C_REASON_OK)
+	{
+		return get_axes_data(data, buffer, scale_value);
+	}
+	return 0;
+}
+
+uint8_t read_magnetometer(int16_t *buffer)
+{
+	uint8_t i;
+
+	float scale_value = get_scale()[MAG].value;
+
+	// 6 registers containing data : 8msb x, 8 lsb x, 8 msb y, ...
+	uint8_t data[6];
+	if(readReg(MAG_ADDRESS, OUT_X_L_M, data) == BCM2835_I2C_REASON_OK)
+	{
+		return get_axes_data(data, buffer, scale_value);
 	}
 	return 0;
 }
@@ -214,6 +215,12 @@ uint8_t read_accelerometer(int16_t *buffer, double scale)
 uint8_t setup_all()
 {
 	bcm2835_i2c_begin();
+
+	if (!setup_accelerometer())
+	{
+		printf("Accelerometer initialization error");
+		return 0;
+	}
 	if (!setup_gyrometer())
 	{
 		printf("Gyrometer initialization error");
@@ -224,11 +231,29 @@ uint8_t setup_all()
 		printf("Magnetometer initialization error");
 		return 0;
 	}
-	if (!setup_accelerometer())
+
+	return 1;
+}
+
+uint8_t setup_accelerometer()
+{
+	uint8_t config_reg;
+	uint8_t i;
+
+	uint8_t scale = get_scale()[ACC].reg_config;
+	// continuous update & 50Hz data rate - z,y,x axis enabled, 
+	config_reg = 0b01010111;	       
+	if(writeReg(ACC_ADDRESS, CTRL_REG1_XM, &config_reg) != OK)
 	{
-		printf("Accelerometer initialization error");
 		return 0;
 	}
+	// Bandwidth anti-alias 773Hz, 16G scale, self test normal mode
+	config_reg = scale;
+	if(writeReg(ACC_ADDRESS, CTRL_REG2_XM, &config_reg) != OK)
+	{
+		return 0;
+	}
+
 	return 1;
 }
 
@@ -237,17 +262,23 @@ uint8_t setup_gyrometer()
 	uint8_t config_reg;
 	uint8_t i;
 
-	double scale = set_get_scale(0,1,0);
+	uint8_t scale = get_scale()[GYR].reg_config;
 
 	// 95 Hz output datarate, 12.5 cutoff - normal mode - z,y,x axis enabled 
 	config_reg = 0b00001111;	       
 	if(writeReg(GYR_ADDRESS, CTRL_REG1_G, &config_reg) != OK)
-		return GYR_FAIL;
+	{
+		return 0;
+	}
 
-	// Bandwidth anti-alias 773Hz, 16G scale, self test normal mode
-	config_reg = 0b00100000;    
-	if(writeReg(GYR_ADDRESS, CTRL_REG2_G, &config_reg) != OK)
-		return GYR_FAIL;
+	// Continuous update, scale 245dps
+	config_reg = scale;    
+	if(writeReg(GYR_ADDRESS, CTRL_REG4_G, &config_reg) != OK)
+	{
+		return 0;
+	}
+
+	return 1;
 }
 
 uint8_t setup_magnetometer()
@@ -255,15 +286,15 @@ uint8_t setup_magnetometer()
 	uint8_t config_reg;
 	uint8_t i;
 
-	double scale = set_get_scale(0,2,0);
+	uint8_t scale = get_scale()[MAG].reg_config;
 
 	// temperature enable - Mag high res - 50 Hz output datarate
 	config_reg = 0b11110000;
 	if(writeReg(MAG_ADDRESS, CTRL_REG5_XM, &config_reg) != OK)
 		return MAG_FAIL;
 
-	// Magnetic full scale = 8 gauss (10)
-	config_reg = 0b00100000;    
+	// Magnetic full scale
+	config_reg = scale;    
 	if(writeReg(MAG_ADDRESS, CTRL_REG6_XM, &config_reg) != OK)
 		return MAG_FAIL;
 
@@ -274,25 +305,6 @@ uint8_t setup_magnetometer()
 	return OK;
 }
 
-uint8_t setup_accelerometer()
-{
-	uint8_t config_reg;
-	uint8_t i;
-
-	double scale = set_get_scale(0,0,0);
-
-	// continuous update & 50Hz data rate - z,y,x axis enabled, 
-	config_reg = 0b01010111;	       
-	if(writeReg(ACC_ADDRESS, CTRL_REG1_XM, &config_reg) != OK)
-		return 0;
-
-	// Bandwidth anti-alias 773Hz, 16G scale, self test normal mode
-	config_reg = 0b00100000;
-	if(writeReg(ACC_ADDRESS, CTRL_REG2_XM, &config_reg) != OK)
-		return 0;
-
-	return 1;
-}
 
 
 void *acq_GYR_ACC()
@@ -315,19 +327,21 @@ void *acq_GYR_ACC()
 		nb_acq = 3;
 
 	//Allocate mem for X Y Z measure for gyro + acc (+mag if defined)
-	buffer = malloc(nb_acq * sizeof(int16_t *));
-	buffer[0] = malloc(3 * nb_acq * sizeof(int16_t));
+	buffer = malloc(nb_acq * 3 * sizeof(int16_t *));
+	buffer[0] = malloc(3 * sizeof(int16_t));
 	for(i = 1; i < nb_acq; i++)
 		buffer[i] = buffer[0] + i * 3;
 
 	setup_all();
 	pthread_create(&print_thread, NULL, 
 			print_to_file, (void *) message_queue);
+
+
 	sleep(1);
 
 	while(!end_program)
 	{
-		read_all(buffer, 0);
+		read_all(buffer);
 		nanosleep(&tt, NULL);
 		//ADD to queue
 		message_queue[pos].x_acc = buffer[0][0];
@@ -345,10 +359,12 @@ void *acq_GYR_ACC()
 		message_queue[pos].write = 1;
 		pos = pos++ == 199 ? 0 : pos;
 	}
+
 	pthread_join(print_thread, NULL);
 	free(buffer[0]);
 	free(buffer);
 	bcm2835_i2c_end();
+	pthread_exit((void *) 1);
 }
 
 
@@ -359,7 +375,7 @@ void *print_to_file(void * arg)
 	tt.tv_nsec = (long) 1000000000.0/INPUT_DATA_RATE;
 
 	const char *path = "";
-	char *cfg = "path_acc_data";
+	char *cfg = "PATH_LSM9DS0_DATA";
 	FILE *fp;
 
 	//transfer from i2c thread to print thread is done through a message

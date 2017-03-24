@@ -26,6 +26,6 @@
 #define ACC_GYR 1
 #define WLX2 0
 
-extern int8_t end_program;//To be modified only by main program to shutdown other threads
+extern uint8_t end_program;//To be modified only by main program to shutdown other threads
 
 #endif

@@ -1,3 +1,5 @@
+#ifndef ACCELEROMETER_H
+#define ACCELEROMETER_H
 /*
  * accelerometer.h
  *  Interface for the LSM9DS0 
@@ -5,9 +7,11 @@
  *  bcm2835_init() and bcm2835_i2c_begin() must have been called before
  *  executing anything
  */
+#include "headers.h"
+#include "cfg.h" 
+#include "util.h"
 
-
- // LSM9DS0 Gyro Registers 
+// LSM9DS0 Gyro Registers 
 #define WHO_AM_I_G			0x0F
 #define CTRL_REG1_G			0x20
 #define CTRL_REG2_G			0x21
@@ -90,23 +94,29 @@
 #define TIME_LATENCY			0x3C
 #define TIME_WINDOW			0x3D
 
+typedef struct scale_cfg
+{
+	float value;
+	uint8_t reg_config;
+} scale_config;
+
 // Linear Acceleration: mg per LSB
-#define SCALE_ACC_2G (0.061F)
-#define SCALE_ACC_4G (0.122F)
-#define SCALE_ACC_6G (0.183F)
-#define SCALE_ACC_8G (0.244F)
-#define SCALE_ACC_16G (0.732F) // Is this right? (apparently right)
+#define SCALE_ACC_2G  (scale_config) {(0.061F), 0b00000000};
+#define SCALE_ACC_4G  (scale_config) {(0.122F), 0b00001000};
+#define SCALE_ACC_6G  (scale_config) {(0.183F), 0b00010000};
+#define SCALE_ACC_8G  (scale_config) {(0.244F), 0b00011000};
+#define SCALE_ACC_16G (scale_config) {(0.732F), 0b00100000} ;
 
 /// Magnetic Field Strength: gauss range
-#define SCALE_MAG_2GAUSS (0.08F)
-#define SCALE_MAG_4GAUSS (0.16F)
-#define SCALE_MAG_8GAUSS (0.32F)
-#define SCALE_MAG_12GAUSS (0.48F)
+#define SCALE_MAG_2GAUSS  (scale_config) {(0.08F), 0b00000000};
+#define SCALE_MAG_4GAUSS  (scale_config) {(0.16F), 0b00100000};
+#define SCALE_MAG_8GAUSS  (scale_config) {(0.32F), 0b01000000};
+#define SCALE_MAG_12GAUSS (scale_config) {(0.48F), 0b01100000};
 
-// Angular Rate: dps per LSB
-#define SCALE_GYR_245DPS      (0.00875F)
-#define SCALE_GYR_500DPS      (0.01750F)
-#define SCALE_GYR_2000DPS     (0.07000F)
+// Angular Rate: dps per L SB
+#define SCALE_GYR_245DPS  (scale_config) {(0.00875F), 0b00000000};
+#define SCALE_GYR_500DPS  (scale_config) {(0.01750F), 0b00010000};
+#define SCALE_GYR_2000DPS (scale_config) {(0.07000F), 0b00100000};
 
 // Slave address for the i2c communication
 #define MAG_ADDRESS            0x1D
@@ -132,6 +142,7 @@ struct data_acq{
 
 typedef enum {OK, READ_FAIL, WRITE_FAIL, ACC_FAIL, GYR_FAIL, MAG_FAIL, FAIL}  error_code;
 
+enum instrument {ACC,GYR,MAG};
 
 /* Function : This thread saves the data send by the LSM9DO in the file 
  * whose path is specified in config. When end_program is set, finishes 
@@ -159,7 +170,7 @@ void *print_to_file(void * arg);
  * Params : int16_t buffer[3][3] : [gyro/magn/acc] [x/y/z]
  * Return : error_code
 */
-uint8_t read_all(int16_t *buffer[3], double scale);
+uint8_t read_all(int16_t *buffer[3]);
 
 
 /* Function : get the gyrometer data
@@ -168,7 +179,7 @@ uint8_t read_all(int16_t *buffer[3], double scale);
  * 	    -double scale : 0 or any SCALE_GYR_xxxxDPS : see p.13
  * Return : error_code
 */
-uint8_t read_gyrometer(int16_t *buffer, double scale);
+uint8_t read_gyrometer(int16_t *buffer);
 
 
 /* Function : get the magnetometer data
@@ -177,7 +188,7 @@ uint8_t read_gyrometer(int16_t *buffer, double scale);
  * 	    -double scale : 0 or any SCALE_MAG_xGAUSS : see p.13
  * Return : error_code
 */
-uint8_t read_magnetometer(int16_t *buffer, double scale);
+uint8_t read_magnetometer(int16_t *buffer);
 
 
 /* Function : get the accelerometer data
@@ -186,7 +197,7 @@ uint8_t read_magnetometer(int16_t *buffer, double scale);
  * 	    -double scale : 0 or any SCALE_ACC_xG : see p.13
  * Return : error_code
 */
-uint8_t read_accelerometer(int16_t *buffer, double scale);
+uint8_t read_accelerometer(int16_t *buffer);
 
 
 /* Function : Configure the LSM9DS0 to start acquisition 
@@ -215,3 +226,5 @@ uint8_t setup_magnetometer();
  * Return : error_code
 */
 uint8_t setup_accelerometer();
+
+#endif

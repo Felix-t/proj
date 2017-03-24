@@ -1,10 +1,4 @@
-#include "include.h"
-
 #include "battery.h"
-#include "cfg.h"
-#include "util.h"
-#include "ADS1256.h"
-#include "bcm2835.h"
 
 static uint8_t ad_board_setup();
 static void set_acq_time(int32_t volt, double *value);
@@ -22,8 +16,10 @@ void *battery(void *arg)
 	int32_t retval;
 	int32_t i;
 	printf("Battery thread ID : %i\n", syscall(__NR_gettid));
-	pthread_cond_t *end = arg;
-
+	struct timespec tt;
+	tt.tv_sec = 0;
+	tt.tv_nsec = (long) 1000000000.0/MEASURE_FREQUENCY;
+	
 	if(!ad_board_setup())
 	{
 		printf("init failed\n");
@@ -32,24 +28,22 @@ void *battery(void *arg)
 	while(volt == -1 || check_battery(volt) )
 	{
 		adc = 0;
-		for (i = 0;i< NB_ITERATION; i++)
+		for (i = 0;i< NB_MEASURES; i++)
 		{
 			while((ADS1256_Scan() == 0));
-			adc += (int32_t) ADS1256_GetAdc(CH_NUM);
-			
-			sleep(ITERATION_TIME);
+			adc += (int32_t) (double)ADS1256_GetAdc(CH_NUM)
+			       		/ (double) NB_MEASURES;
 		}
-		adc = (int32_t) adc/NB_ITERATION;
 		volt = (adc * 100) / 167;
+		printf("Tension = %ld.%03ld %03ld V \r\n", volt /1000000, (volt%1000000)/1000, volt%1000); 
 		if(volt < 0)
 			volt = -volt;
-		sleep(SLEEP_TIME);
 	}
 	
-	pthread_cond_broadcast(end);
-	set_next_startup(100); //@TODO : 100 for testing
+//	set_next_startup(100); //@TODO : 100 for testing
 	bcm2835_spi_end();
 	retval = 1;
+	end_program = 1;
 	pthread_exit((void *)retval);
 }
 

@@ -1,5 +1,3 @@
-#include "include.h"
-
 #include "util.h"
 
 void copy(char *source, char *dest)

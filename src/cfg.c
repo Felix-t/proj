@@ -6,11 +6,6 @@
  *	 - Start acquisitions subroutines
  *  @TODO : Logging system, see syslog
  */
-#define CFG_FILE "conftest"
-
-#include "include.h"
-
-#include <libconfig.h>
 #include "cfg.h"
 
 /* Function :
@@ -59,7 +54,6 @@ void get_cfg_str(const char **values, char **str, int32_t str_nb)
 
 	for(i = 0; i<str_nb; i++)
 	{
-		printf("%s\n", str[0]);
 		config_lookup_string(&config, str[i], values);
 	//	if((path = config_lookup(&config, str[i])) != NULL)
 	//		values[i] = config_setting_get_float(path);

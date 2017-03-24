@@ -28,10 +28,8 @@ RPI_V2_GPIO_P1_13->RPI_GPIO_P1_13
 ::
 */
 
-#include "include.h"
 
 #include "ADS1256.h"
-#include <bcm2835.h>
 
 //CS      -----   SPICS  
 //DIN     -----   MOSI
@@ -683,9 +681,10 @@ uint16_t Voltage_Convert(float Vref, float voltage)
 *	The return value:  NULL
 *********************************************************************************************************
 */
-/*
-int  main()
+
+/*int  main()
 {
+	printf("DEBUT");
       uint8_t id;
   	int32_t adc;
 	int32_t volt;
@@ -696,11 +695,25 @@ int  main()
 	// Change for differential input
 	input_type input = SINGLE;
 
-	if(!board_Setup())
+	if (!bcm2835_init())
 	{
-		return 1;
+		printf("bug bcm");
+		return 0;
 	}
+	if (!bcm2835_spi_begin())
+	{
+		printf("bug bcm spi");
+		return 0;
+	}
+	bcm2835_spi_setBitOrder(BCM2835_SPI_BIT_ORDER_LSBFIRST );//default
+	bcm2835_spi_setDataMode(BCM2835_SPI_MODE1);              //default
+	bcm2835_spi_setClockDivider(BCM2835_SPI_CLOCK_DIVIDER_1024); //default
+	bcm2835_gpio_fsel(SPICS, BCM2835_GPIO_FSEL_OUTP);//
+	bcm2835_gpio_write(SPICS, HIGH);
+	bcm2835_gpio_fsel(DRDY, BCM2835_GPIO_FSEL_INPT);
+	bcm2835_gpio_set_pud(DRDY, BCM2835_GPIO_PUD_UP);    	
 
+	printf("config done");
 	ch_num = 0;	
 	id = ADS1256_ReadChipID();
 
@@ -737,6 +750,7 @@ int  main()
 	printf("\n\n");
     bcm2835_spi_end();
     bcm2835_close();
+    printf("end");
 	
     return 0;
 }*/

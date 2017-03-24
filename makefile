@@ -1,23 +1,27 @@
+.PHONY: clean all copy
+
 CC=gcc
 
 ODIR=obj
-IDIR=src
+SDIR=src
 BDIR=bin
+HDIR=inc
 
-LIBS=-lbcm2835 -pthread -lconfig
+LIBS=-lbcm2835 -pthread -lconfig -lm
+CFLAGS = -I$(HDIR)
 
-_DEPS = ADS1256.h cfg.h include.h util.h battery.h
-DEPS = $(patsubst %,$(IDIR)/%,$(_DEPS))
+DEPS = $(wildcard $(HDIR)/*.h)
 
-OBJ = $(patsubst src/%.c,$(ODIR)/%.o,$(SRC))
+OBJ = $(patsubst $(SDIR)/%.c,$(ODIR)/%.o,$(SRC))
+OBJS = $(wildcard $(ODIR)/*.o)
 
-SRC = $(wildcard src/*.c)
+SRC = $(wildcard $(SDIR)/*.c)
 
-$(ODIR)/%.o: src/%.c $(DEPS)
-	$(CC) -c -o $@ $< 
+$(BDIR)/acq_surffeol: copy $(OBJ)
+	gcc -o $@ $(OBJS) $(LIBS)
 
-$(BDIR)/ad_converter: $(OBJ)
-	gcc -o $@ $^ $(LIBS)
+$(ODIR)/%.o: $(SDIR)/%.c $(DEPS)
+	$(CC) -c -o $@ $< $(CFLAGS)
 
 $(BDIR)/cfg: src/cfg.c src/cfg.h
 	gcc -o $@ src/cfg.c $(LIBS)
@@ -25,8 +29,12 @@ $(BDIR)/cfg: src/cfg.c src/cfg.h
 $(BDIR)/accelerometer: $(IDIR)/accelerometer.c 
 	gcc -o $@ src/accelerometer.c $(LIBS)
 
-.PHONY: clean
+copy:
+	cd Interrogateur_Opsens && $(MAKE) objects
+	cp -u Interrogateur_Opsens/Include/*.h inc/
+	cp -u Interrogateur_Opsens/Objet/*.o obj/
 
 clean:
 	rm -f $(ODIR)/*.o $(BDIR)/*
+	cd Interrogateur_Opsens/ && make clean
 
