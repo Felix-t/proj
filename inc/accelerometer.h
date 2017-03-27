@@ -147,7 +147,7 @@ enum instrument {ACC,GYR,MAG};
 /* Function : This thread saves the data send by the LSM9DO in the file 
  * whose path is specified in config. When end_program is set, finishes 
  * writing last records before quitting
- * Params : arg is a message queue : type struct data_acq
+ * Params : arg is a message queue : type struct data_acq[]
 */
 void *print_to_file(void * arg);
 
@@ -157,13 +157,17 @@ void *print_to_file(void * arg);
  * Setup and config the board, then request and read the data through i2c
  * The data is sent to be saved through a message queue
 */
-void *acq_GYR_ACC();
+void *acq_GYR_ACC(void * arg);
 
 
-/* Function : Thread managing the data saving on USB disk
- * Params : Arg is the pointer to the message queue (array of struct data_acq
-*/
-void *print_to_file(void * arg);
+/* Function : Set the scale for the specified LSM9D0 instrument
+ * 	The hardware needs to be reconfigured with setup() afterwards	
+ * Params :  * 	uint8_t instrument : from enum instrument
+ * 	scale_config new_scale : new scale struct for the specified instrument
+ * 	Possible choices in #define (ex SCALE_ACC...)
+ * Return : 0 if instruments (@TODO : or scale) does not exist
+ */
+uint8_t set_scale(enum instrument inst, scale_config new_scale);
 
 
 /* Function : Get the accelerometer, gyrometer and magnetometer data

@@ -8,9 +8,11 @@
 
 
 #define CH_NUM 0
-#define NB_MEASURES 500
+#define NB_MEASURES 10
 #define MEASURE_FREQUENCY 50 	//X every sec
-#define SLEEP_TIME 20 		//Between each series of data
+#define INTERVAL 10 		//Between each series of data
+
+#define PATH_VOLT_LOGS "logs/tension.txt"
 
 void *battery(void *arg);
 

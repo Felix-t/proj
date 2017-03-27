@@ -22,10 +22,11 @@
 #include <libconfig.h>
 #include <pthread.h>
 
+#define SGF 1  //Sigfox enabled
 #define MAG_ACQ 0
 #define ACC_GYR 1
 #define WLX2 0
 
-extern uint8_t end_program;//To be modified only by main program to shutdown other threads
+extern _Atomic uint8_t end_program;//To be modified only by main program to shutdown other threads
 
 #endif

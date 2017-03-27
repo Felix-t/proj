@@ -8,4 +8,6 @@ Interrogateur_Opsens/
 *.lrz
 test
 tags
-
+logs
+armapi
+*.swp

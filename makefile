@@ -16,8 +16,9 @@ OBJ = $(patsubst $(SDIR)/%.c,$(ODIR)/%.o,$(SRC))
 OBJS = $(wildcard $(ODIR)/*.o)
 
 SRC = $(wildcard $(SDIR)/*.c)
+all: copy $(BDIR)/acq_surffeol	
 
-$(BDIR)/acq_surffeol: copy $(OBJ)
+$(BDIR)/acq_surffeol: $(OBJ)
 	gcc -o $@ $(OBJS) $(LIBS)
 
 $(ODIR)/%.o: $(SDIR)/%.c $(DEPS)

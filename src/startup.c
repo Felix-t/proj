@@ -17,38 +17,70 @@
 #include "battery.h"
 #include "Main_Acquisition_Opsens_WLX2.h"
 
-static uint8_t start_AD_acq(pthread_t *battery_thread);
-static uint8_t start_WLX2_acq(pthread_t *WLX2_thread);
-static uint8_t start_Accelerometer_acq(pthread_t *accelerometer_thread);
+static uint8_t start_AD_acq(pthread_t *battery_thread, _Atomic uint8_t *alive);
+static uint8_t start_WLX2_acq(pthread_t *WLX2_thread, _Atomic uint8_t *alive);
+static uint8_t start_Accelerometer_acq(pthread_t *accelerometer_thread, _Atomic uint8_t *alive);
+static uint8_t start_sigfox(pthread_t *sigfox_thread, _Atomic uint8_t alive);
 
+_Atomic uint8_t end_program = 0;
 
-// @TODO : ...
-void *placeholder(void* arg)
-{}
+// @TODO : placeholder for file sigfox.c etc
+void *sigfox(void* arg)
+{
+	_Atomic uint8_t *alive = arg;
+	printf("Thread sigfox created, id : %i\n",
+			syscall(__NR_gettid));
+	FILE *fp;
+	if(!(fp = fopen("logs/sigfox", "w+")))
+	{
+		printf("Can't open file sigfox");
+		pthread_exit((void *) 0);
+	}
+	while(!end_program)
+	{
+	fprintf(fp, "thread AD : %u\nthread lsmd9ds0 : %uthread sigfox : %u",
+			alive[0], alive[1], alive[2]);
+	fflush(fp); // To fprint immediately
+	sleep(5);
+	}
+	fclose(fp);
+}
 
 /* Function start_AD_acq :
  * Create the thread used for power management
  * Params : The pid of the thread
  * Return : Success/failure code
 */
-static uint8_t start_AD_acq(pthread_t *battery_thread)
+static uint8_t start_AD_acq(pthread_t *battery_thread, _Atomic uint8_t *alive)
 {
+	printf("b");
 
-	pthread_create(battery_thread, NULL, battery, NULL);
+	pthread_create(battery_thread, NULL, battery, (void*)alive);
 	
 //	free(status);
 	return 1;
 }
+
+static uint8_t start_Sigfox(pthread_t *sigfox_thread, _Atomic uint8_t *alive)
+{
+
+	pthread_create(sigfox_thread, NULL, sigfox, (void*)alive);
+	
+//	free(status);
+	return 1;
+}
+
+
 
 /* Function start_Accelerometer_acq :
  * Create the thread used for accelerometer and gyrometer acquisition
  * Params : Pid of the thread, condition signaling the end of the thread
  * Return : Success/failure code
 */
-static uint8_t start_Accelerometer_acq(pthread_t *accelerometer_thread)
+static uint8_t start_Accelerometer_acq(pthread_t *accelerometer_thread, _Atomic uint8_t *alive)
 {
 
-	pthread_create(accelerometer_thread, NULL, acq_GYR_ACC, NULL);
+	pthread_create(accelerometer_thread, NULL, acq_GYR_ACC, (void*)alive);
 	
 //	free(status);
 	return 1;
@@ -61,11 +93,11 @@ static uint8_t start_Accelerometer_acq(pthread_t *accelerometer_thread)
  * Params : Pid of the thread, condition signal to end of the thread
  * Return : Success/failure code
 */
-static uint8_t start_WLX2_acq(pthread_t *WLX2_thread)
+static uint8_t start_WLX2_acq(pthread_t *WLX2_thread, _Atomic uint8_t *alive)
 {
 	//@TODO : start dhcp server with correct ip address
 
-	pthread_create(WLX2_thread, NULL, acq_WLX2, NULL);
+	pthread_create(WLX2_thread, NULL, acq_WLX2, (void*)alive);
 	
 //	free(status);
 	return 1;
@@ -91,41 +123,46 @@ static void *test()
 }
 
 
-uint8_t end_program = 0;
 int  main()
 {
 	int32_t status;
 	uint8_t i = 0;
-	pthread_t *threads = (pthread_t *) malloc((ACC_GYR + WLX2 + 1)*sizeof(pthread_t));
- 
+	uint8_t nb_threads = SGF + ACC_GYR + WLX2 +1;
+	pthread_t *threads = malloc(nb_threads*sizeof(pthread_t));
+ 	_Atomic uint8_t alive[nb_threads];
+
 	printf("Main thread ID : %i\n", syscall(__NR_gettid));
 
 	if(!bcm2835_init())
 		return 0;
 
 	//Start battery management
-	if(!start_AD_acq(&threads[i++]))
+	if(!start_AD_acq(&threads[i], &alive[i++]))
 	//if(pthread_create(&threads[i++], NULL, test, NULL))
 	{
 		printf("AD thread creation failed\n");
 		return 0;
 	}
 	sleep(1);
-	if(WLX2 && !start_WLX2_acq(&threads[i++]))
+	if(WLX2 && !start_WLX2_acq(&threads[i], &alive[i++]))
 	{
 		printf("WLX2 thread creation failed\n");
 		return 0;
 	}
-	if(ACC_GYR && !start_Accelerometer_acq(&threads[i++]))
+	if(ACC_GYR && !start_Accelerometer_acq(&threads[i++], &alive[i++]))
 	{
 		printf("LSM9D0 thread creation failed\n");
 		return 0;
 	}	
-	for(i=0;i< ACC_GYR + WLX2 + 1;i++)
+	if(SGF && !start_Sigfox(&threads[i], alive))
+	{
+		printf("Sigfox thread creation failed\n");
+		return 0;
+	}	
+	for(i = 0; i < nb_threads; i++)
 	{
 		sleep(5);
 		pthread_join(threads[i], NULL);
-		end_program = 1;
 	}
 
 	free(threads);
@@ -134,5 +171,3 @@ int  main()
 
     return 0;
 } 
-
-

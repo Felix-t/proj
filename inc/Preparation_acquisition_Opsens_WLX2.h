@@ -17,7 +17,7 @@
 #include "Fonctions_Utiles.h"
 #endif
 
-extern uint8_t end_program;
+extern _Atomic uint8_t end_program;
 
 struct shared 
 {

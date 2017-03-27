@@ -3,6 +3,22 @@
 static uint8_t ad_board_setup();
 static void set_acq_time(int32_t volt, double *value);
 static uint8_t check_battery(int32_t volt);
+static void battery_cleanup(void * arg);
+
+struct cleanup_args{
+	FILE * fp;
+	_Atomic uint8_t *alive;
+};
+
+static void battery_cleanup(void * arg)
+{
+	struct cleanup_args *args = arg;
+	printf("battery cleanup");
+	bcm2835_spi_end();
+	end_program = 1;
+	fclose(args->fp);
+	*args->alive = 0;
+}
 
 /* Starting point for the thread managing power of the system
  * Use the ADS1256 interface to capture voltage and extrapolate remaining battery power
@@ -11,15 +27,25 @@ static uint8_t check_battery(int32_t volt);
 */
 void *battery(void *arg)
 {
+
 	int32_t volt = -1;
 	int32_t adc;
 	int32_t retval;
 	int32_t i;
+	FILE *fp;
 	printf("Battery thread ID : %i\n", syscall(__NR_gettid));
-	struct timespec tt;
-	tt.tv_sec = 0;
-	tt.tv_nsec = (long) 1000000000.0/MEASURE_FREQUENCY;
+	time_t t;
+	//struct timespec tt;
+	//tt.tv_sec = 0;
+	//tt.tv_nsec = (long) 1000000000.0/MEASURE_FREQUENCY;
+	struct cleanup_args *args;
+	args->alive = arg;
+	*(args->alive) = 1;
+	fp = fopen(PATH_VOLT_LOGS, "w+");
+	args->fp = fp;
 	
+	pthread_cleanup_push(battery_cleanup, (void*) args);
+
 	if(!ad_board_setup())
 	{
 		printf("init failed\n");
@@ -35,16 +61,17 @@ void *battery(void *arg)
 			       		/ (double) NB_MEASURES;
 		}
 		volt = (adc * 100) / 167;
-		printf("Tension = %ld.%03ld %03ld V \r\n", volt /1000000, (volt%1000000)/1000, volt%1000); 
+		t = time(NULL);
+		fprintf(fp, "%s, %ld.%03ld %03ld V \r\n", ctime(&t), 
+				volt /1000000, (volt%1000000)/1000, volt%1000); 
+		fflush(fp); // To fprint immediately
 		if(volt < 0)
 			volt = -volt;
+		sleep(INTERVAL);
 	}
 	
 //	set_next_startup(100); //@TODO : 100 for testing
-	bcm2835_spi_end();
-	retval = 1;
-	end_program = 1;
-	pthread_exit((void *)retval);
+	pthread_cleanup_pop(1);
 }
 
 /*
