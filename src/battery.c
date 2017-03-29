@@ -41,7 +41,7 @@ void *battery(void *arg)
 	struct cleanup_args *args;
 	args->alive = arg;
 	*(args->alive) = 1;
-	fp = fopen(PATH_VOLT_LOGS, "w+");
+	fp = fopen(PATH_VOLT_LOGS, "a+");
 	args->fp = fp;
 	
 	pthread_cleanup_push(battery_cleanup, (void*) args);

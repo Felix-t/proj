@@ -1,12 +1,15 @@
+#include <time.h>
 #include <stdio.h>
-#include <pthread.h>
-#include <sys/types.h> 
-#include <stdint.h>
-
+#include <stdlib.h>
  
 int main(void)
 {
-	_Atomic uint8_t alive[2] = {2,3};
-	printf("Alive : %u\n alive[0] %u\n &alive[1] %u\n",
-			alive, alive[0], &alive[1]);
+	FILE *fp;
+	fp = fopen("test.txt", "r");
+	char *i;
+	char *j;
+	i=malloc(1000*sizeof(char));
+	j=malloc(1000*sizeof(char));
+	printf("abcd : %i\n%s\n%s\n", fscanf(fp, "%s: %s", i, j), i, j);
+	fclose(fp);
 }

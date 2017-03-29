@@ -15,7 +15,6 @@
 #include "util.h"
 #include "accelerometer.h"
 #include "battery.h"
-#include "Main_Acquisition_Opsens_WLX2.h"
 
 static uint8_t start_AD_acq(pthread_t *battery_thread, _Atomic uint8_t *alive);
 static uint8_t start_WLX2_acq(pthread_t *WLX2_thread, _Atomic uint8_t *alive);
@@ -38,10 +37,14 @@ void *sigfox(void* arg)
 	}
 	while(!end_program)
 	{
-	fprintf(fp, "thread AD : %u\nthread lsmd9ds0 : %uthread sigfox : %u",
-			alive[0], alive[1], alive[2]);
-	fflush(fp); // To fprint immediately
-	sleep(5);
+		fprintf(fp, "Battery : %u ; ", alive[0]);
+		if(ACC_GYR)
+			fprintf(fp, "LSM9DS0 : %u ; WLX2 : %u ; ", alive[1]);
+		if(WLX2)
+			fprintf(fp, "WLX2 : %u ; ", alive[ACC_GYR + 1]);
+		fprintf(fp, "\n");
+		fflush(fp); // To fprint immediately
+		sleep(SGF_INTERVAL);
 	}
 	fclose(fp);
 }
@@ -137,23 +140,23 @@ int  main()
 		return 0;
 
 	//Start battery management
-	if(!start_AD_acq(&threads[i], &alive[i++]))
-	//if(pthread_create(&threads[i++], NULL, test, NULL))
+	//if(!start_AD_acq(&threads[i], &alive[i++]))
+	if(pthread_create(&threads[i++], NULL, test, NULL))
 	{
 		printf("AD thread creation failed\n");
 		return 0;
 	}
 	sleep(1);
-	if(WLX2 && !start_WLX2_acq(&threads[i], &alive[i++]))
-	{
-		printf("WLX2 thread creation failed\n");
-		return 0;
-	}
 	if(ACC_GYR && !start_Accelerometer_acq(&threads[i++], &alive[i++]))
 	{
 		printf("LSM9D0 thread creation failed\n");
 		return 0;
 	}	
+	if(WLX2 && !start_WLX2_acq(&threads[i], &alive[i++]))
+	{
+		printf("WLX2 thread creation failed\n");
+		return 0;
+	}
 	if(SGF && !start_Sigfox(&threads[i], alive))
 	{
 		printf("Sigfox thread creation failed\n");

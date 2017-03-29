@@ -94,11 +94,6 @@
 #define TIME_LATENCY			0x3C
 #define TIME_WINDOW			0x3D
 
-typedef struct scale_cfg
-{
-	float value;
-	uint8_t reg_config;
-} scale_config;
 
 // Linear Acceleration: mg per LSB
 #define SCALE_ACC_2G  (scale_config) {(0.061F), 0b00000000};
@@ -123,11 +118,26 @@ typedef struct scale_cfg
 #define ACC_ADDRESS            0x1D
 #define GYR_ADDRESS            0x6B
 
+//TTS between each measure : change this depending on the output datarate
+//setup in the hardware
 #define INPUT_DATA_RATE		50 //Hz	
+
 #define QUEUE_SIZE 		200
 
+struct acq_cleanup_args{
+	int16_t** buffer;
+	pthread_t *print_thread;
+	_Atomic uint8_t *alive;
+};
+
+typedef struct scale_cfg
+{
+	float value;
+	uint8_t reg_config;
+} scale_config;
 
 struct data_acq{
+	time_t acq_time;
 	int16_t x_acc;
 	int16_t y_acc;
 	int16_t z_acc;

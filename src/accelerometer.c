@@ -19,13 +19,6 @@ static scale_config *get_scale();
 static void acq_cleanup(void *arg);
 static void print_cleanup(void *arg);
 
-struct acq_cleanup_ptrs{
-	int16_t** buffer;
-	pthread_t *print_thread;
-	_Atomic uint8_t *alive;
-};
-
-
 /* Function : parse the data from the LSM9DS0 registers to get readable values
  * Params : 
  * 	-uint8_t *data : contains the 6 bytes of raw data taken from the LSM9DS0 
@@ -143,7 +136,7 @@ static scale_config *get_scale()
 static void acq_cleanup(void *arg)
 {	
 	printf("LSM9DS0 cleanup routine");
-	struct acq_cleanup_ptrs *ptr = arg;
+	struct acq_cleanup_args *ptr = arg;
 
 	bcm2835_i2c_end();
 	pthread_join(*(ptr->print_thread), NULL);
@@ -328,15 +321,11 @@ uint8_t setup_magnetometer()
 
 void *acq_GYR_ACC(void * arg)
 {
-
 	printf("Thread LSM9D0 created id : %i\n", syscall(__NR_gettid));
 
-	//TTS between each measure : change this depending on the datarate
-	//setup in the LSM9DS0
 	struct timespec tt;
 	tt.tv_sec = 0;
 	tt.tv_nsec = (long) 1000000000.0/INPUT_DATA_RATE;
-
 
 	uint8_t i, pos = 0;
 	uint8_t nb_acq = MAG_ACQ ? 3 : 2; //3 if magnetometer is used
@@ -346,12 +335,29 @@ void *acq_GYR_ACC(void * arg)
 
 	pthread_t print_thread;
 
-	struct acq_cleanup_ptrs *args;
+	// Setup the cleanup handlers
+	struct acq_cleanup_args *args;
 	args->alive = arg;
 	*args->alive = 1;
 	args->buffer = buffer;
 	args->print_thread = &print_thread;
 	pthread_cleanup_push(acq_cleanup, args);
+
+	//Allocate mem for the message queue
+	if((buffer = malloc(nb_acq * 3 * sizeof(int16_t *))) == NULL 
+			|| nb_acq == 0)
+	{
+		printf("malloc failed\n");
+		return 0;
+	}
+	if((buffer[0] = malloc(3 * sizeof(int16_t))))
+	{
+		printf("malloc failed\n");
+		return 0;
+	}
+	for(i = 1; i < nb_acq; i++)
+		buffer[i] = buffer[0] + i * 3;
+
 
 	// Setup i2c, then setup ctrl registers of the lsm9ds0, create thread
 	if(!setup_all() || pthread_create(&print_thread, NULL,	print_to_file,
@@ -362,26 +368,12 @@ void *acq_GYR_ACC(void * arg)
 		pthread_exit((void *) 0);
 	}
 
-	//Allocate mem for X Y Z measure for gyro + acc (+mag if defined)
-	if((buffer = malloc(nb_acq * 3 * sizeof(int16_t *))) == NULL 
-			|| nb_acq == 0)
-	{
-		printf("malloc failed\n");
-		return 0;
-	}
-	if((buffer[0] = malloc(3 * sizeof(int16_t))) == NULL)
-	{
-		printf("malloc failed\n");
-		return 0;
-	}
-	for(i = 1; i < nb_acq; i++)
-		buffer[i] = buffer[0] + i * 3;
-
 	sleep(1);
 
 	while(!end_program)
 	{
 		read_all(buffer);
+		message_queue[pos].acq_time = time(NULL);
 		nanosleep(&tt, NULL);
 		//ADD to queue
 		message_queue[pos].x_acc = buffer[0][0];
@@ -400,8 +392,6 @@ void *acq_GYR_ACC(void * arg)
 		pos = pos++ == 199 ? 0 : pos;
 	}
 
-
-	pthread_join(print_thread, NULL);
 	pthread_cleanup_pop(1);
 }
 
@@ -417,10 +407,9 @@ void *print_to_file(void * arg)
 	const char *path = "";
 	char *cfg = "PATH_LSM9DS0_DATA";
 	FILE *fp;
-	time_t current_time;
 	//transfer from i2c thread to print thread is done through a message
 	//queue which contains up to 200 records. This thread reads data when 
-	//the write var is set to 1.
+	//the message_queue[i].write var is set to 1.
 	struct data_acq *message_queue = (struct data_acq*) arg;
 	uint8_t pos = 0;
 
@@ -446,8 +435,7 @@ void *print_to_file(void * arg)
 
 		while(message_queue[pos].write == 1)
 		{	
-			current_time = time(NULL);
-			fprintf(fp, "%s,", ctime(&current_time)); 
+			fprintf(fp, "%li,", &message_queue[pos].acq_time);
 			if(MAG_ACQ)
 				fprintf(fp, "%i,%i,%i,",
 						message_queue[pos].x_mag,

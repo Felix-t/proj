@@ -24,9 +24,15 @@
 
 #define SGF 1  //Sigfox enabled
 #define MAG_ACQ 0
-#define ACC_GYR 1
-#define WLX2 0
+#define ACC_GYR 0
+#define WLX2 1
 
 extern _Atomic uint8_t end_program;//To be modified only by main program to shutdown other threads
+
+//Forward declaration of acq_wlx
+extern void * acq_WLX2(void *);
+
+//TODO :  fichier sigfox
+#define SGF_INTERVAL 10  // 140 messages/jour : 3600*24/140
 
 #endif

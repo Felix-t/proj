@@ -1,4 +1,4 @@
-.PHONY: clean all copy
+.PHONY: clean all copy rec
 
 CC=gcc
 
@@ -16,12 +16,15 @@ OBJ = $(patsubst $(SDIR)/%.c,$(ODIR)/%.o,$(SRC))
 OBJS = $(wildcard $(ODIR)/*.o)
 
 SRC = $(wildcard $(SDIR)/*.c)
-all: copy $(BDIR)/acq_surffeol	
+all: rec $(BDIR)/acq_surffeol	
 
-$(BDIR)/acq_surffeol: $(OBJ)
-	gcc -o $@ $(OBJS) $(LIBS)
+$(BDIR)/acq_surffeol: $(OBJS) $(OBJ) 
+	gcc -o $@ $(ODIR)/*.o $(LIBS)
 
-$(ODIR)/%.o: $(SDIR)/%.c $(DEPS)
+$(ODIR)/%.o: $(SDIR)/%.c $(HDIR)/%.h
+	$(CC) -c -o $@ $< $(CFLAGS)
+
+$(ODIR)/%.o: $(SDIR)/%.c
 	$(CC) -c -o $@ $< $(CFLAGS)
 
 $(BDIR)/cfg: src/cfg.c src/cfg.h
@@ -29,6 +32,10 @@ $(BDIR)/cfg: src/cfg.c src/cfg.h
 
 $(BDIR)/accelerometer: $(IDIR)/accelerometer.c 
 	gcc -o $@ src/accelerometer.c $(LIBS)
+
+rec:
+	cd Interrogateur_Opsens && $(MAKE) objects
+	@cp -u Interrogateur_Opsens/Objet/*.o obj/
 
 copy:
 	cd Interrogateur_Opsens && $(MAKE) objects
