@@ -1,0 +1,23 @@
+auto lo
+
+iface lo inet loopback
+
+
+
+
+#iface eth0 inet dhcp
+#auto eth0
+allow-hotplug eth0
+iface eth0 inet static
+address 10.0.0.1
+netmask 255.255.240.0
+#network 137.121.77.64
+#broadcast 137.121.77.127
+#gateway 137.121.77.124
+
+
+
+#allow-hotplug wlan0
+#iface wlan0 inet manual
+#wpa-roam /etc/wpa_supplicant/wpa_supplicant.conf
+#iface default inet dhcp

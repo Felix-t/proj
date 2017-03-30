@@ -4,10 +4,12 @@ conftest
 *.txt
 AD-DA/
 DAC8532/
-Interrogateur_Opsens/
 *.lrz
 test
 tags
 logs
 armapi
 *.swp
+a.out
+dnsmasq.conf
+libtest.a

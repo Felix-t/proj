@@ -1,0 +1,13 @@
+#Projet:  test__xx
+# 
+# Capteur du canal 	1
+#	->Type jauge:  S1
+#	->Numero jauge:  L104-0338-02
+#	->Paramètres:  GF0=0 GF1=2490 GF2=0 GF3=0
+# 
+# Capteur du canal 	2
+#	->Type jauge:  S1
+#	->Numero jauge:  L104-0348-01
+#	->Paramètres:  GF0=0 GF1=2501 GF2=0 GF3=0
+# 
+#Date et heure	Canal  1	Canal  2	

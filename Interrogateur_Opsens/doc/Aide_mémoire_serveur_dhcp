@@ -1,0 +1,60 @@
+Serveur DHCP: ISC DHCP
+
+* Configuration du serveur dhcp
+Cmd: sudo nano /etc/dhcp/dhcpd.conf
+
+-détection par l'adresse MAC de l'interrogateur et attribution automatique de l'IP: 10.0.0.15
+Code dans le fichier dhcpd.conf: 
+host Opsens_interrogateur {
+   hardware ethernet a0:41:5e:00:00:3c;
+   fixed-address 10.0.0.15;
+}
+
+-Définition des IP que le serveur DCHP peut attribuer
+Code dans le fichier dhcpd.conf: 
+subnet 10.0.0.0 netmask 255.255.250.0 {
+    range 10.0.0.10 10.0.0.20;
+    option routers 10.0.0.1;
+}
+
+
+aide web: www.noveldevices.co.uk/rp-dhcp-server
+
+
+
+* Lease (connexion établie) du serveur dhcp
+nano /var/lib/dhcp/dhcpd.leases
+
+
+
+
+
+Avec Raspbian jessie Pixel
+
+Utilisation du serveur DHCP: dnsmasq
+
+fichier de configuration : /etc/dnsmasq.conf 
+dhcp-range=10.0.0.10,10.0.0.20
+dhcp-host=a0:41:5e:00:00:49,10.0.0.15
+
+le serveur dhcpcd doit être arrêté: sudo service dhcpcd stop 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,15 +1,20 @@
 #include <time.h>
 #include <stdio.h>
 #include <stdlib.h>
- 
+#include <string.h>
+
+#define IDN_EXPECTED_ANSWER "Opsens Sol., WLX-2-P2-N-62LCA-V2, SN:32R0078"
+#define NB_CH 1
+
+void func(char *str)
+{
+	char *a = malloc(100);	
+	a = "bjikl";
+	memcpy(str, a, 50);
+}
 int main(void)
 {
-	FILE *fp;
-	fp = fopen("test.txt", "r");
-	char *i;
-	char *j;
-	i=malloc(1000*sizeof(char));
-	j=malloc(1000*sizeof(char));
-	printf("abcd : %i\n%s\n%s\n", fscanf(fp, "%s: %s", i, j), i, j);
-	fclose(fp);
+	char str[100];
+	func(str);
+	printf("%s\n", str);
 }

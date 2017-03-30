@@ -1,0 +1,838 @@
+#include "Preparation_acquisition_Opsens_WLX2.h" 
+
+/********************************************************/
+/*Fonction: Configuration_WLX2                          */
+/*                                                      */
+/********************************************************/
+int Preparation_acquisition_WLX2(struct param_pgm *pparam_pgm, struct parametres_connexion *pparam_connection, struct config_all *pconfig_all, struct shared *pshared)
+{
+	int ok=1;
+
+	Init_struct_param_pgm(pparam_pgm, pparam_connection, pconfig_all, pshared);
+
+	ok=Init_repertoire_pour_enregistrement_data(pparam_pgm);
+
+	if(ok)
+	{
+		ok=Verif_free_space(pparam_pgm,1);
+	}
+
+	return ok;
+}
+
+
+
+
+
+
+
+/********************************************************/
+/*Fonction: Init_struct_shared                          */
+/*                                                      */
+/********************************************************/
+int Init_struct_shared(struct shared *pshared, char *chemin, float *ch_zero,float *ch_offset,float *ch_value, pthread_mutex_t *mutex)
+{
+	int ok;
+	pshared->size_save_file=0;
+	pshared->nb_save_file=0;
+	pshared->ch_zero=ch_zero;
+	pshared->ch_offset=ch_offset;
+	pshared->ch_value=ch_value;
+	pshared->size_max_free=0; 
+	pshared->chemin=chemin;
+	pshared->cmd_acq='p';
+	pshared->mutex=mutex;
+	pshared->thread_enregistrement=0;
+
+
+
+	if(pthread_mutex_init (pshared->mutex, NULL)==0){ok=1;}else{ok=0;};
+
+
+
+
+	return ok;
+}
+
+
+
+/********************************************************/
+/*Fonction: Init_struct_param_pgm                       */
+/*                                                      */
+/********************************************************/
+void Init_struct_param_pgm(struct param_pgm *pparam_pgm, struct parametres_connexion *pparam_connection, struct config_all *pconfig_all, struct shared *pshared)
+{
+	pparam_pgm->pparam_connection=pparam_connection;
+	pparam_pgm->pconfig_all=pconfig_all;
+	pparam_pgm->pshared=pshared;
+}
+
+
+/********************************************************/
+/*Fonction: Lancement_thread_acquistion                 */
+/*                                                      */
+/********************************************************/
+int Lancement_thread_acquistion(struct param_pgm *param)
+{
+	int ok;
+
+	pthread_t xthread_Acquisition_data;
+	pthread_t xthread_Wait_Command;
+
+/*	if(!pthread_create (&xthread_Wait_Command, NULL, 
+				thread_Wait_Command, param) &&
+	   !pthread_create (&xthread_Acquisition_data, NULL, 
+		   		thread_Acquisition_data, param) &&
+	   !pthread_join(xthread_Wait_Command,NULL) &&
+	   !pthread_join(xthread_Acquisition_data,NULL))
+	{
+		return 0;
+	}
+	return 1;*/
+
+	ok=pthread_create (&xthread_Wait_Command, NULL, thread_Wait_Command, param); 
+	if (ok==0)
+	{
+		ok=pthread_create (&xthread_Acquisition_data, NULL, thread_Acquisition_data, param); 
+	}else{ok=1;}
+
+	if (ok==0)
+	{
+		ok=pthread_join(xthread_Wait_Command,NULL);
+	}else{ok=1;}
+
+	if (ok==0)
+	{
+		ok=pthread_join(xthread_Acquisition_data,NULL);
+	}else{ok=1;}
+
+	if (ok==1){ok=-1;}
+	if (ok==0){ok=1;}
+	return ok;
+}
+
+
+
+
+
+
+
+
+/********************************************************/
+/*Fonction: thread_Acquisition_data                    */
+/*				                       */
+/********************************************************/
+void* thread_Acquisition_data (void* arg)
+{
+	struct param_pgm  *p_data=arg;
+	struct tm* tm_info;
+	time_t timer;
+
+	int ok,ok_enregistrement,ok_lecture_data,nb_file_save,cmd_zero,rep_ch;
+	int bytes_written  = 0;  	/* Value for storing the number of bytes written to the port */ 
+	int nbyte_read;    /* Number of bytes read by the read() system call */
+	int bytes_to_read = 0;
+	int port_id;
+	int i,j,nb_meas,nb_meas_done;
+	float f, data[2],f_value[2];
+	float zero_channel,offset_channel,zero_channel1,offset_channel1,zero_channel2,offset_channel2;
+	unsigned char read_buffer[9];
+	unsigned char write_buffer[8];
+	char cmd_receive,cmd_receive_before,buffer[26];
+	char reponse_state[20]="State:-201";
+
+	FILE *fp;
+
+	cmd_zero=0;
+	printf("\t-> %s\n\t","Préparation de l'enregistrement ...");
+
+	char answer_2[2][_RECEIVE_BUFF_SIZE]={'\0','\0'};
+	Send_command_and_receive_answer_2(p_data->pparam_connection, "MEASure:RUN?", 2 ,answer_2, 0);
+	//printf("%s %s\n",answer_2[0],answer_2[1]);
+	//printf("ooo%s\n",answer_2[0]);
+	if (answer_2[0][0]!='0')
+	{
+		Zero_str(answer_2[0]);Zero_str(answer_2[1]);
+		Send_command_and_receive_answer_2(p_data->pparam_connection, "MEASure:STOP", 2 ,answer_2, 0);
+		//printf("%s %s\n",answer_2[0],answer_2[1]);
+	}
+
+	//printf("ooo%s\n",answer_2[0]);
+	//printf("->Find_substr_in_str state:-201 %d\n",Find_substr_in_str(answer_2[0],reponse_state));
+	while (Find_substr_in_str(answer_2[0],reponse_state)==1)
+	{
+		printf("%s\n", "L'interrogateur n'est pas prêt");
+		printf("%s\n", "L'éteindre et le rallumer");
+		printf("%s\n", "Taper sur la touche entrée quand c'estfait");
+		getchar(); 
+
+		printf("%s\t", "Ré-initilisation de la connexion UDP ... ");
+		ok=Close_socket(p_data->pparam_connection->ID_socket_command);
+		if(ok){sleep(5);ok=Init_param_connexion(p_data->pparam_connection);sleep(5);}
+		if (ok)
+		{
+			printf("%s\t", "ok");
+			Zero_str(answer_2[0]);
+			Send_command_and_receive_answer_2(p_data->pparam_connection, "MEASure:RUN?", 2 ,answer_2, 0);
+		}else{
+			printf("%s\n", "Relancer le programme!");
+			goto fin_thread_Acquisition_data;
+		}
+	}
+
+
+	Get_zero_sensor(p_data->pparam_connection, 1, &zero_channel1);p_data->pshared->ch_zero[0]=zero_channel1;
+	//printf("ZERO CH1 %f\t",zero_channel1);
+	Get_zero_sensor(p_data->pparam_connection, 2, &zero_channel2);p_data->pshared->ch_zero[1]=zero_channel2;
+	//printf("ZERO CH2 %f\n",zero_channel2);
+
+	Get_offset_sensor(p_data->pparam_connection, 1, &offset_channel1);p_data->pshared->ch_offset[0]=offset_channel1;
+	//printf("OFFSET CH1 %f\t",offset_channel1);
+	Get_offset_sensor(p_data->pparam_connection, 2, &offset_channel2);p_data->pshared->ch_offset[1]=offset_channel2;
+	//printf("OFFSET CH2 %f\n",offset_channel2);
+	//printf("%s\n","... ok");
+
+
+	pthread_mutex_lock(p_data->pshared->mutex);
+	//printf("%c\n",p_data->pshared->cmd_acq);
+	cmd_receive=p_data->pshared->cmd_acq;
+	pthread_mutex_unlock(p_data->pshared->mutex);
+
+	p_data->pshared->nb_meas_done=0;
+	p_data->pshared->offset_modif=0;
+	//nb_meas=p_data->pshared->nb_meas_done;
+
+	p_data->pshared->ok_record=0;
+
+
+	cmd_receive_before='c';
+
+	Open_file_Enregistrement_data(p_data);
+
+
+	while (cmd_receive !='s')
+	{
+		/*printf("cmd_receive %c\n",cmd_receive);
+		  printf("cmd_receive_before %c\n",cmd_receive_before);
+		  sleep(2);*/
+		cmd_zero=0;
+
+		if ((cmd_receive =='o')||(cmd_receive =='0')|| (cmd_receive =='1')||(cmd_receive =='2'))
+		{
+
+			if (cmd_receive_before=='c')
+			{ 
+				printf("--%s--\n","Enregistrement en pause");
+				pthread_mutex_lock(p_data->pshared->mutex);
+				p_data->pshared->ok_record=0;
+				pthread_mutex_unlock(p_data->pshared->mutex);
+				//Stop_Thread_Enregistrement_data(p_data);
+			}
+
+			if (cmd_receive !='o'){printf("%s\n","Mise à zéro des capteurs...");}else{printf("%s\n","Modification des offsets de mesure ...");}
+
+
+			switch(cmd_receive)
+			{
+				case '0':
+					Zero_sensor(p_data->pparam_connection,1,1);
+					break;
+				case '1':
+					Zero_sensor(p_data->pparam_connection,1,0);
+
+					break;
+				case '2':
+					Zero_sensor(p_data->pparam_connection,0,1);
+					break;
+				case 'o':
+					p_data->pshared->offset_modif=1;
+
+					printf("%s\n","Quels sont le ou les canaux concernés? [0, 1, ou 2]");
+					sleep(2);
+					scanf("%d",&rep_ch);
+					switch(rep_ch)
+					{ 
+						case 0:
+							printf("%s\n","Donnez la valeur de l'offset de mesure pour le canal 1 (impérativement un  nombre avec un point)");
+							scanf("%f",&offset_channel1);
+							printf("%s %f %s","offset=",offset_channel1, " ... ");
+							if(Set_offset_sensor(p_data->pparam_connection, 1, offset_channel1)){printf("%s\n"," modification de l'offset effectuée");}
+							printf("%s\n","Donnez la valeur de l'offset de mesure pour le canal 2 (impérativement un  nombre avec un point)");
+							scanf("%f",&offset_channel2);
+							printf("%s %f %s","offset=",offset_channel2, " ... "); 
+							if(Set_offset_sensor(p_data->pparam_connection, 2, offset_channel2)){printf("%s\n"," modification de l'offset effectuée");}
+							break;
+						case 1:
+							printf("%s\n","Donnez la valeur de l'offset de mesure pour le canal 1 (impérativement un  nombre avec un point)");
+							scanf("%f",&offset_channel1);
+							printf("%s %f %s","offset=",offset_channel1, " ... ");
+							if(Set_offset_sensor(p_data->pparam_connection, 1, offset_channel1)){printf("%s\n"," modification de l'offset effectuée");}
+							break;
+						case 2:
+							printf("%s\n","Donnez la valeur de l'offset de mesure pour le canal 2 (impérativement un  nombre avec un point)");
+							scanf("%f",&offset_channel2);
+							printf("%s %f %s","offset=",offset_channel2, " ... ");
+							if(Set_offset_sensor(p_data->pparam_connection, 2, offset_channel2)){printf("%s\n"," modification de l'offset effectuée");}
+							break;
+					}
+					p_data->pshared->offset_modif=0; 
+					break;
+			}
+
+			Get_zero_sensor(p_data->pparam_connection, 1, &zero_channel1);
+			printf("ZERO CH1 %f\t",zero_channel1);
+			Get_zero_sensor(p_data->pparam_connection, 2, &zero_channel2);
+			printf("ZERO CH2 %f\n",zero_channel2);
+
+			Get_offset_sensor(p_data->pparam_connection, 1, &offset_channel1);
+			printf("OFFSET CH1 %f\t",offset_channel1);
+			Get_offset_sensor(p_data->pparam_connection, 2, &offset_channel2);
+			printf("OFFSET CH2 %f\n",offset_channel2);
+			printf("%s\n","... ok");
+
+			p_data->pshared->ch_zero[0]=zero_channel1;
+			p_data->pshared->ch_zero[1]=zero_channel2;
+			p_data->pshared->ch_offset[0]=offset_channel1;
+			p_data->pshared->ch_offset[1]=offset_channel2; 
+
+			// fp=p_data->pshared->fp; 
+			//fprintf(fp,"# ZERO: %s %f %s %f\t","CH1",zero_channel1,"CH2",zero_channel2); 
+			//fprintf(fp,"# OFFSET: %s %f %s %f\n","CH1",offset_channel1,"CH2",offset_channel2);
+
+			if (cmd_receive_before=='c')
+			{
+				cmd_receive='c';
+				cmd_receive_before='p';
+				printf("--%s--\n","Reprise de l'enregistrement");
+				cmd_zero=1;
+			}else{
+				printf("--%s--\n","Prêt pour l'enregistrement");  
+				cmd_receive=cmd_receive_before;
+				cmd_zero=0;
+			}
+
+			Fermeture_ouverture_new_file(p_data);
+			Stop_Thread_Enregistrement_data(p_data);
+			sleep(1);
+
+			pthread_mutex_lock(p_data->pshared->mutex);
+			p_data->pshared->cmd_acq=cmd_receive;
+			pthread_mutex_unlock(p_data->pshared->mutex);
+
+			//printf("cmd_receive %c\n",cmd_receive);
+			//printf("cmd_receive_before %c\n",cmd_receive_before);
+
+			//
+
+
+
+
+
+			/*       // p_data->pshared->cmd_acq=cmd_receive_before;
+				 cmd_receive='p';cmd_receive_before='c';
+				 p_data->pshared->cmd_acq=cmd_receive;
+
+				 pthread_mutex_unlock(p_data->pshared->mutex);
+			//cmd_receive=cmd_receive_before;*/
+		}
+
+
+		if (cmd_receive =='i') 
+		{
+			printf("%s\n","Relévé des données: ...");
+			pthread_mutex_lock(p_data->pshared->mutex);
+			p_data->pshared->cmd_acq=cmd_receive_before;
+			pthread_mutex_unlock(p_data->pshared->mutex);
+
+			cmd_receive=cmd_receive_before;
+
+
+			time(&timer);
+			tm_info=localtime(&timer);
+			strftime(buffer, 26,"%Y/%m/%d %H:%M:%S",tm_info);
+
+			pthread_mutex_lock(p_data->pshared->mutex);
+			if(p_data->pshared->ok_record==0)
+			{
+				Get_single_measurement(p_data); 
+			} 
+			pthread_mutex_unlock(p_data->pshared->mutex);
+
+			for(j=0;j<NB_CH;j++)
+			{
+				f_value[j]=0.0;
+				if(p_data->pconfig_all->pconfig_meas->select_ch[j])
+				{
+					pthread_mutex_lock(p_data->pshared->mutex);    
+					f_value[j]=p_data->pshared->ch_value[j];
+					pthread_mutex_unlock(p_data->pshared->mutex);
+				}
+			}
+
+
+			printf("%s\t: ",buffer);
+			for(j=0;j<NB_CH;j++)
+			{
+				printf("%s %d: %f\t","Canal", j+1,f_value[j]);
+			} 
+			printf("%s\n","");
+			pthread_mutex_lock(p_data->pshared->mutex);
+			nb_meas_done=p_data->pshared->nb_meas_done;
+			pthread_mutex_unlock(p_data->pshared->mutex);
+			printf("%s %d\n","Nombre de mesures faites: ",nb_meas_done);
+
+
+
+
+			zero_channel1=p_data->pshared->ch_zero[0];
+			zero_channel2=p_data->pshared->ch_zero[1];
+			offset_channel1=p_data->pshared->ch_offset[0];
+			offset_channel2=p_data->pshared->ch_offset[1];
+
+			printf("CH1 -> ZERO: %f\t",zero_channel1);printf("OFFSET: %f\n",offset_channel1);
+			printf("CH2 -> ZERO: %f\t",zero_channel2);printf("OFFSET: %f\n",offset_channel2);
+
+			if(cmd_receive_before=='p') {printf("--%s--\n","Prêt pour l'enregistrement");} 
+
+		}
+
+
+		if (cmd_receive =='c')
+		{ 
+
+			if (cmd_receive_before=='p')
+			{
+
+				if(cmd_zero)
+				{
+					cmd_zero=0;
+				}else{             
+					printf("\t-> %s\n","Enregistrement en cours");
+				}
+
+
+				if(Run_Thread_Enregistrement_data(p_data))
+				{
+
+					pthread_mutex_lock(p_data->pshared->mutex);
+					p_data->pshared->ok_record=1;
+					pthread_mutex_unlock(p_data->pshared->mutex);
+
+					ok_enregistrement=Measure_start_infinite(p_data->pparam_connection);
+
+
+					if (ok_enregistrement==0)
+					{
+
+						printf("%s\n","Problème lors de l'enregistrement des données");
+						pthread_mutex_lock(p_data->pshared->mutex);
+						p_data->pshared->ok_record=0;
+						p_data->pshared->cmd_acq='s';
+						pthread_mutex_unlock(p_data->pshared->mutex);
+						goto fin_thread_Acquisition_data;
+					}
+
+
+				}else{
+					ok_enregistrement=0;
+					pthread_mutex_lock(p_data->pshared->mutex);
+					p_data->pshared->ok_record=0;
+					pthread_mutex_unlock(p_data->pshared->mutex); 
+
+				}
+			}
+
+
+
+
+
+		}
+
+
+		if ((cmd_receive=='p')&&(cmd_receive_before=='c'))
+			//if (cmd_receive_before!='p')
+		{
+
+			/*  if(cmd_zero)
+			    {
+			    cmd_zero=0;Fermeture_ouverture_new_file(p_data);
+
+			    }else{*/
+			printf("\t-> %s\n","Enregistrement en pause");
+
+			pthread_mutex_lock(p_data->pshared->mutex);
+			p_data->pshared->ok_record=0;
+			pthread_mutex_unlock(p_data->pshared->mutex);
+
+			// Stop_Thread_Enregistrement_data(p_data);
+			//  }
+
+			//if(cmd_zero){cmd_zero=0;Fermeture_ouverture_new_file(p_data);}
+
+		}
+
+		cmd_receive_before=cmd_receive;
+
+		pthread_mutex_lock(p_data->pshared->mutex);
+		cmd_receive=p_data->pshared->cmd_acq;
+		pthread_mutex_unlock(p_data->pshared->mutex);
+
+	}
+
+	pthread_mutex_lock(p_data->pshared->mutex);
+	p_data->pshared->ok_record=0;
+	pthread_mutex_unlock(p_data->pshared->mutex);
+
+	Stop_Thread_Enregistrement_data(p_data);
+
+	printf("\t-> %s\n","Fin de l'enregistrement");
+	//Close_file_Enregistrement_data_continuous_measurement((struct save_file *)p_data->psf);
+
+
+fin_thread_Acquisition_data:
+
+	pthread_exit(NULL);
+}
+
+
+
+
+
+
+
+
+
+/********************************************************/
+/*Fonction: thread_Wait_Command                         */
+/*				                                              */
+/********************************************************/
+void* thread_Wait_Command (void* arg)
+{
+	char cmd_user,cmd_user_send;
+	struct param_pgm  *p_data=arg;
+
+
+	fd_set readfds;
+	int num_readable;
+	struct timeval tv;
+	int fd_stdin;
+	int num_bytes;
+	int MAXBYTES=80;
+	char buf[MAXBYTES];
+
+	fd_stdin = fileno(stdin);
+
+	cmd_user=p_data->pshared->cmd_acq;
+	//printf("++++%c\n",cmd_user);
+	cmd_user_send=cmd_user;
+	while (cmd_user != 's')
+	{
+		FD_ZERO(&readfds);
+		FD_SET(fileno(stdin), &readfds);
+
+		tv.tv_sec = 1;
+		tv.tv_usec = 0;
+
+		//fscanf(stdin," %c",&cmd_user_send);
+
+
+		while(p_data->pshared->offset_modif==1)
+		{
+			sleep(1);
+		}
+
+		num_readable = select(fd_stdin + 1, &readfds, NULL, NULL, &tv);
+		if (num_readable == -1) {
+			printf("\n%s\n","Error avec select in thread_Wait_Command");
+			break;
+		}
+		if (num_readable == 0) {
+			cmd_user_send=p_data->pshared->cmd_acq;
+		} else {
+			num_bytes = read(fd_stdin, buf, MAXBYTES);
+			cmd_user_send=buf[0];
+			//fflush(stdin);
+			if (num_bytes < 0) {
+				printf("\n%s\n","Error avec read in thread_Wait_Command");
+				break;
+			}
+		}
+
+
+
+		//if ((cmd_user_send !='c')&& (cmd_user_send !='p')&&(cmd_user_send !='i')&&(cmd_user_send !='s')&& (cmd_user_send !='0')&&(cmd_user_send !='1')&&(cmd_user_send !='2')){cmd_user_send ='c';}
+		//if (cmd_user_send!=cmd_user)
+		if ((cmd_user_send =='o')||(cmd_user_send =='c')||(cmd_user_send =='p')||(cmd_user_send =='i')||(cmd_user_send =='s')||(cmd_user_send =='0')||(cmd_user_send =='1')||(cmd_user_send =='2'))
+		{
+			//printf("------->%c\n",cmd_user_send);
+			pthread_mutex_lock(p_data->pshared->mutex);
+			p_data->pshared->cmd_acq=cmd_user_send;
+			cmd_user=cmd_user_send;
+			pthread_mutex_unlock(p_data->pshared->mutex);
+		}else{
+			printf("%s %c %s\n","Warning: commande '",cmd_user_send,"' inconnue");
+		}
+
+
+		//usleep(1000000);
+	}
+
+
+
+	pthread_exit(NULL);
+}
+
+
+
+
+
+
+/********************************************************/
+/*Fonction: Verif_free_space          */      
+/*                                                     */
+/********************************************************/
+int Verif_free_space(struct param_pgm *param, int ok_print)
+{
+	int ok=1,nb_file_enregistrable=0;
+	float size_max_1_file=0.0,res_size_max_free=0.0;
+	char chemin[500]={'\0'};
+
+	size_max_1_file=param->pconfig_all->pconfig_save_file->size_max_save_file;
+
+	strcat(chemin,"\"");
+	strcat(chemin,param->pshared->chemin);
+	strcat(chemin,"\"");
+
+	/*
+	   if (param->pconfig_all->pconfig_save_file->usb)
+	   {
+	   strcat(chemin,"\"");
+	   strcat(chemin,param->pconfig_all->pconfig_save_file->rep_usb);
+	   strcat(chemin,"\"");
+	   }else{
+	   strcat(chemin,"/home/pi");
+	   }//printf("%d %s\n",param->pconfig_all->pconfig_save_file->usb,chemin);
+	   */
+
+	printf("\t%s","");
+	res_size_max_free=Calcul_free_space(chemin, ok_print);
+	//printf("%f %f %f %d\n",size_max_1_file,res_size_max_free,res_size_max_free/size_max_1_file,(int)(res_size_max_free/size_max_1_file));
+
+	param->pshared->size_max_free=res_size_max_free;
+
+	if (res_size_max_free <= size_max_1_file){
+		ok=0;
+		printf("\n%s\n\n","Erreur: Espace libre insuffisant pour enregistrer les données");
+	}else{
+		if(ok_print)
+		{
+			nb_file_enregistrable=(int)(res_size_max_free/size_max_1_file);
+			printf("\t %d %s %.2f %s \n",nb_file_enregistrable, "fichiers de",size_max_1_file,"ko sont enregistrables");
+		}
+	}
+
+	return ok;
+}
+
+
+
+
+
+
+/********************************************************/
+/*Fonction: Envoi_SMS_alert                             */
+/*                                                      */
+/********************************************************/
+void Envoi_SMS_alert()
+{
+	FILE * pp;
+
+	if ((pp = popen("python2.7 ../Include/Script__Envoi_alert_SMS_Opsens.py", "r")) != NULL)
+	{
+		pclose(pp);
+	}
+}
+
+
+
+
+/********************************************************/
+/*Fonction: Init_repertoire_pour_enregistrement_data    */
+/*                                                      */ 
+/********************************************************/
+int Init_repertoire_pour_enregistrement_data(struct param_pgm *param)
+{
+	DIR *rep=NULL;
+	int ok=1,tmp_string_len,ok_usb;
+	int file_save_exist,nb_file_save;
+	char rep_data[1024]="",buffer[26];
+	char cwd[1024],tempchar[1024];
+	struct dirent* entry=NULL;
+	struct stat stabuf;
+	struct tm* tm_info;
+	time_t timer;
+
+
+	time(&timer);
+	tm_info=localtime(&timer);
+	strftime(buffer, 26,"%d_%m_%Y",tm_info);
+
+	ok_usb=param->pconfig_all->pconfig_save_file->usb;
+	if (ok_usb)
+	{
+		strcpy(rep_data,param->pconfig_all->pconfig_save_file->rep_usb);strcat(rep_data,"/Data");
+	}else{
+		getcwd(cwd,sizeof(cwd));
+		//printf("Current working dir: %s\n",cwd);
+		strcpy(rep_data,cwd);strcat(rep_data,"/Data");
+		//printf("%s\n",rep_data);
+	}
+
+	rep=opendir(rep_data);
+	if (rep == NULL) 
+	{
+		mkdir(rep_data,S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+	}else{
+		if (closedir(rep)==-1) exit(-1);
+	}
+
+
+	strcat(rep_data,"/");strcat(rep_data,param->pconfig_all->pconfig_save_file->nom_projet);
+	//printf("%s\n",rep_data);
+
+	rep=opendir(rep_data);
+	if (rep == NULL) 
+	{
+		mkdir(rep_data,S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+	}else{
+		if (closedir(rep)==-1) {ok=0;};
+	}
+
+
+	strcat(rep_data,"/Data__");strcat(rep_data,buffer);
+	//printf("%s\n",rep_data);
+
+
+	rep=opendir(rep_data);
+	if (rep == NULL) 
+	{
+		mkdir(rep_data,S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+	}else{
+		if (closedir(rep)==-1) {ok=0;};
+	}
+
+	printf("\t-> %s\n\t %s\n","Les données vont être enregistrées dans le répertoire : ",rep_data);
+
+	memcpy(param->pshared->chemin,rep_data,(strlen(rep_data)+1)*sizeof(char));
+
+	//nb_file_save=find_last_file_save(rep_data, nomfile_save);
+	Find_dernier_enregistrement(param);
+	//printf("%d\n",nb_file_save);
+
+	//return nb_file_save;
+	return ok;
+}
+
+
+
+
+
+
+
+
+/********************************************************/
+/*Fonction: Find_dernier_enregistrement                 */
+/*                                                      */ 
+/********************************************************/
+void Find_dernier_enregistrement(struct param_pgm *param)
+{
+	DIR *rep=NULL;
+	int i,j,file_save_exist,nb_file_save;
+	int find;
+	char *rep_data, *nomfile_data;
+	char *tmp_string=NULL,*tmp2_string=NULL,*tmp3_string=NULL;
+	int tmp_string_len,tmp2_string_len,tmp3_string_len,ch='_';
+	struct dirent* entry=NULL;
+
+
+
+	rep_data=param->pshared->chemin;//printf("******%s\n",rep_data);
+	nomfile_data=param->pconfig_all->pconfig_save_file->nomfic;//printf("uuuuu%s\n",nomfile_data);
+
+	rep=opendir(rep_data);
+	file_save_exist=0;
+	nb_file_save=0;
+	while((entry=readdir(rep))!= NULL)
+	{
+		if (strcmp(".",entry->d_name) == 0 || strcmp("..",entry->d_name) == 0) continue;
+		//printf("Répertoire: %s\n", entry->d_name);
+		//printf("File: %s\n", entry->d_name);
+		tmp_string=malloc((strlen(entry->d_name)+1)*sizeof(char));
+		for(i=0;i<strlen(entry->d_name);i++)
+		{
+			tmp_string[i]=entry->d_name[i];
+		}
+		tmp_string[i]='\0';
+
+		//printf("File: %s\n", tmp_string);
+		//getchar();
+		tmp_string_len=strlen(tmp_string);
+		if (tmp_string_len>=1)
+		{
+			find=0;
+
+			i=tmp_string_len;
+			while((tmp_string[i]!='_')&&((i-1)>=0))
+			{
+				i=i-1;
+			}
+
+			//printf("%d\n",i);
+
+			if (i>0)
+			{
+				if(tmp_string[i-1]=='_') 
+				{
+					tmp2_string_len=i-1;
+					tmp2_string=malloc((tmp2_string_len+1)*sizeof(char));
+					for(j=0;j<tmp2_string_len;j++)
+					{
+						tmp2_string[j]=tmp_string[j];
+					}
+					tmp2_string[j]='\0';
+
+					if (strcmp(nomfile_data,tmp2_string) == 0)
+					{
+						tmp3_string_len=tmp_string_len-i;
+
+						tmp3_string=malloc((tmp3_string_len+1)*sizeof(char));
+						for(j=0;j<tmp3_string_len;j++)
+						{
+							tmp3_string[j]=tmp_string[i+j+1];
+						}
+						tmp3_string[j]='\0';
+						find=atoi(tmp3_string);
+						if (find>nb_file_save) {nb_file_save=find;}
+						//printf("%s\n",tmp3_string);
+						tmp3_string=NULL;
+						free(tmp3_string);
+					}
+					find=1;
+					tmp2_string=NULL;
+					free(tmp2_string);
+				}
+			}
+		}
+
+		tmp_string=NULL;
+		free(tmp_string);
+		//getchar();
+	}
+
+	if (closedir(rep)==-1) exit(-1);
+
+	param->pshared->nb_save_file=nb_file_save;
+	//return nb_file_save;
+}
+
+
