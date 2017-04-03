@@ -7,17 +7,14 @@
 int Preparation_acquisition_WLX2(struct param_pgm *pparam_pgm, struct parametres_connexion *pparam_connection, struct config_all *pconfig_all, struct shared *pshared)
 {
 	int ok=1;
-	printf("1");
 	Init_struct_param_pgm(pparam_pgm, pparam_connection, pconfig_all, pshared);
-	printf("2\n");
 	ok=Init_repertoire_pour_enregistrement_data(pparam_pgm);
 
-	printf("end prepa acquisition");
 	if(ok)
 	{
 		ok=Verif_free_space(pparam_pgm,1);
 	}
-	printf("end prepa acquisition");
+	printf("End Preparation_acquisition_WLX2 : %i\n", ok);
 	return ok;
 }
 
@@ -365,7 +362,6 @@ int Init_repertoire_pour_enregistrement_data(struct param_pgm *param)
 	tm_info=localtime(&timer);
 	strftime(buffer, 26,"%d_%m_%Y",tm_info);
 
-	printf("1\n");
 	ok_usb=param->pconfig_all->pconfig_save_file->usb;
 	if (ok_usb)
 	{
@@ -375,7 +371,6 @@ int Init_repertoire_pour_enregistrement_data(struct param_pgm *param)
 		strcpy(rep_data,cwd);strcat(rep_data,"/Data");
 	}
 
-	printf("2\n");
 	rep=opendir(rep_data);
 	if (rep == NULL) 
 	{
@@ -385,7 +380,6 @@ int Init_repertoire_pour_enregistrement_data(struct param_pgm *param)
 	}
 
 
-	printf("3\n");
 	strcat(rep_data,"/");strcat(rep_data,param->pconfig_all->pconfig_save_file->nom_projet);
 
 	rep=opendir(rep_data);
@@ -396,7 +390,6 @@ int Init_repertoire_pour_enregistrement_data(struct param_pgm *param)
 		if (closedir(rep)==-1) {ok=0;};
 	}
 
-	printf("4\n");
 
 	strcat(rep_data,"/Data__");strcat(rep_data,buffer);
 
@@ -410,13 +403,11 @@ int Init_repertoire_pour_enregistrement_data(struct param_pgm *param)
 	}
 
 
-	printf("5\n");
 	memcpy(param->pshared->chemin,rep_data,(strlen(rep_data)+1)*sizeof(char));
 
 	//nb_file_save=find_last_file_save(rep_data, nomfile_save);
 	Find_dernier_enregistrement(param);
 
-	printf("6\n");
 	//return nb_file_save;
 	return ok;
 }

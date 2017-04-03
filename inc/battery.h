@@ -13,7 +13,7 @@
 #define INTERVAL 30 		//Between each series of data
 
 #define PATH_VOLT_LOGS "logs/tension.txt"
-
+#define NB_CFG_BATTERY 5
 void *battery(void *arg);
 
 #endif

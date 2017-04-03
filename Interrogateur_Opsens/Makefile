@@ -1,7 +1,7 @@
 # Makefile racine
 .SUFFIXES:
 .INIT:
-.PHONY: clean_objet clean objects
+.PHONY: clean_objet clean objects .defmain
 
 # Paths
 DSRC = Source
@@ -22,7 +22,10 @@ _OBJ= $(SRC:.c=.o)
 OBJ = $(patsubst $(DSRC)%,$(DOBJ)/%,$(_OBJ))
 DEPS = $(wildcard $(DINC)/*.h)
 
-objects: $(OBJ)
+objects: defmain $(OBJ)
+
+defmain: 
+	$(eval CFLAGS := $(CFLAGS) -D_MAIN_)
 
 Main_Acquisition_Opsens_WLX2: $(OBJ)
 #	@echo "Compilation du programme Main_Acquisition_Opsens_WLX2"

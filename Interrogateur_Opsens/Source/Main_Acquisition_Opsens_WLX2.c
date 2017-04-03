@@ -22,125 +22,125 @@
 /*====================================================================================================*/
 
 #include "Main_Acquisition_Opsens_WLX2.h"
+#ifndef _MAIN_
+int main_()
+{
+	int i,j,k;
+	int *select_ch;
+	int (*GFx_jauge_ch)[4]={0};
+	float *ch_zero,*ch_offset;
+	float *ch_value;
 
-//int main_()
-//{
-//	int i,j,k;
-//	int *select_ch;
-//	int (*GFx_jauge_ch)[4]={0};
-//	float *ch_zero,*ch_offset;
-//	float *ch_value;
-//
-//	char nom_projet[_STR_LONG]={'\0'},chemin[_STR_LONG]={'\0'},nomfic[_STR_LONG]={'\0'},rep_usb[_STR_LONG]={'\0'};
-//
-//	char *numero_jauge_ch[NB_CH];
-//	char *type_jauge_ch[NB_CH];
-//
-//	struct parametres_connexion param_connection;
-//	struct config_save_file pconfig_save_file;
-//	struct config_meas pconfig_meas;
-//	struct config_all pconfig_all;
-//	struct shared pshared;
-//	pthread_mutex_t mutex=PTHREAD_MUTEX_INITIALIZER;//=PTHREAD_MUTEX_INITIALIZER;
-//	struct param_pgm pparam_pgm;
-//
-//
-//	printf("\n%s\n","*********************************************");
-//	printf("%s\n","*** Pilotage de WLX2 via le protocole UDP ***");
-//	printf("%s\n\n","*********************************************");
-//
-//
-//	/*----------------------------------------------------------------  */
-//	printf("%s\n","o Configuration du programme d'acquisition: ...");
-//
-//	Kill_old_process_Pgm_Opsens("Programme_Acquisition_Opsens_WLX2");
-//	Init_struct_config_save_file(&pconfig_save_file, nom_projet, nomfic, rep_usb);
-//	Init_struct_config_meas(&pconfig_meas, select_ch, GFx_jauge_ch, numero_jauge_ch, type_jauge_ch);
-//	Init_struct_config_all(&pconfig_all,&pconfig_save_file,&pconfig_meas);
-//	printf("%s \n\n","... ok: configuration du programme d'acquisition terminé");
-//
-//	/*----------------------------------------------------------------  */
-//	printf("%s\n","o Chargement du fichier de configuration : ...");
-//
-//	if (Load_config_file(&pconfig_all)==0)
-//	{
-//		printf("%s\n","... Echec du chargement du fichier de configuration");
-//		goto fin_main;
-//	}
-//	printf("%s \n\n","... ok: chargement terminé");
-//	//Print_struct_config(&pconfig);
-//
-//
-//	/*----------------------------------------------------------------  */
-//	printf("%s\n","o Etablissement et test de la connexion avec WLX2: ...");
-//	if (Make_and_test_connexion(&param_connection,0)==0)
-//	{
-//		printf("%s\n","... Echec de la connexion avec WLX2");
-//		goto fin_main;
-//	}
-//	printf("%s \n\n","... ok: connexion établie");
-//
-//
-//	/*----------------------------------------------------------------  */
-//	printf("%s\n","o Configuration du module WLX2 : ...");
-//	/*if (Configuration_WLX2(&param_connection, &pconfig_all)==0)
-//	  {
-//	  printf("%s\n","... Echec de la configuration ");
-//	  goto fin_main;
-//	  }
-//	  printf("%s \n\n","... ok: configuration réussie");
-//	  */
-//
-//
-//	/*----------------------------------------------------------------  */
-//	printf("%s\n","o Préparation de l'acquisition des données: ...");
-//
-//	ch_zero=malloc(NB_CH*sizeof(float));
-//	ch_offset=malloc(NB_CH*sizeof(float));
-//	ch_value=malloc(NB_CH*sizeof(float));
-//
-//	if (Init_struct_shared(&pshared,chemin, ch_zero, ch_offset, ch_value, &mutex)==0)
-//	{
-//		printf("%s\n","... Echec de la préparation");
-//		goto fin_main;
-//	}
-//	sleep(1);
-//
-//	if (Preparation_acquisition_WLX2(&pparam_pgm, &param_connection, &pconfig_all, &pshared)==0)
-//	{
-//		printf("%s\n","... Echec de la préparation");
-//		goto fin_main;
-//	}
-//	printf("%s \n\n","... ok: l'acquisition des données peut être lancée");
-//	sleep(1);
-//
-//
-//	/*----------------------------------------------------------------  */
-//	printf("%s\n","o Lancement de l'acquisition des données: ...");
-////@TODO ; cette condition n'est pas possible, lancement renvoie -1,1 ou une ERROR
-//	if (Lancement_thread_acquistion(&pparam_pgm)==0)
-//	{
-//		printf("%s\n","... Echec de l'acquisition des données");
-//		goto fin_main;
-//	}
-//	printf("%s \n\n","... ok: fin de l'acquisition ");
-//
-//	pthread_mutex_destroy(&mutex);
-//	pthread_exit(NULL);
-//
-//
-//	/*----------------------------------------------------------------  */
-//
-//
-//fin_main:;
-//
-//
-//	 printf("%s\n","o Fermeture de la connexion avec WLX2: ...");
-//	 //Reset_connexion(&param_connection);
-//
-//	 //printf("%s\n","Bye Bye");
-//}
+	char nom_projet[_STR_LONG]={'\0'},chemin[_STR_LONG]={'\0'},nomfic[_STR_LONG]={'\0'},rep_usb[_STR_LONG]={'\0'};
 
+	char *numero_jauge_ch[NB_CH];
+	char *type_jauge_ch[NB_CH];
+
+	struct parametres_connexion param_connection;
+	struct config_save_file pconfig_save_file;
+	struct config_meas pconfig_meas;
+	struct config_all pconfig_all;
+	struct shared pshared;
+	pthread_mutex_t mutex=PTHREAD_MUTEX_INITIALIZER;//=PTHREAD_MUTEX_INITIALIZER;
+	struct param_pgm pparam_pgm;
+
+
+	printf("\n%s\n","*********************************************");
+	printf("%s\n","*** Pilotage de WLX2 via le protocole UDP ***");
+	printf("%s\n\n","*********************************************");
+
+
+	/*----------------------------------------------------------------  */
+	printf("%s\n","o Configuration du programme d'acquisition: ...");
+
+	Kill_old_process_Pgm_Opsens("Programme_Acquisition_Opsens_WLX2");
+	Init_struct_config_save_file(&pconfig_save_file, nom_projet, nomfic, rep_usb);
+	Init_struct_config_meas(&pconfig_meas, select_ch, GFx_jauge_ch, numero_jauge_ch, type_jauge_ch);
+	Init_struct_config_all(&pconfig_all,&pconfig_save_file,&pconfig_meas);
+	printf("%s \n\n","... ok: configuration du programme d'acquisition terminé");
+
+	/*----------------------------------------------------------------  */
+	printf("%s\n","o Chargement du fichier de configuration : ...");
+
+	if (Load_config_file(&pconfig_all)==0)
+	{
+		printf("%s\n","... Echec du chargement du fichier de configuration");
+		goto fin_main;
+	}
+	printf("%s \n\n","... ok: chargement terminé");
+	//Print_struct_config(&pconfig);
+
+
+	/*----------------------------------------------------------------  */
+	printf("%s\n","o Etablissement et test de la connexion avec WLX2: ...");
+	if (Make_and_test_connexion(&param_connection,0)==0)
+	{
+		printf("%s\n","... Echec de la connexion avec WLX2");
+		goto fin_main;
+	}
+	printf("%s \n\n","... ok: connexion établie");
+
+
+	/*----------------------------------------------------------------  */
+	printf("%s\n","o Configuration du module WLX2 : ...");
+	/*if (Configuration_WLX2(&param_connection, &pconfig_all)==0)
+	  {
+	  printf("%s\n","... Echec de la configuration ");
+	  goto fin_main;
+	  }
+	  printf("%s \n\n","... ok: configuration réussie");
+	  */
+
+
+	/*----------------------------------------------------------------  */
+	printf("%s\n","o Préparation de l'acquisition des données: ...");
+
+	ch_zero=malloc(NB_CH*sizeof(float));
+	ch_offset=malloc(NB_CH*sizeof(float));
+	ch_value=malloc(NB_CH*sizeof(float));
+
+	if (Init_struct_shared(&pshared,chemin, ch_zero, ch_offset, ch_value, &mutex)==0)
+	{
+		printf("%s\n","... Echec de la préparation");
+		goto fin_main;
+	}
+	sleep(1);
+
+	if (Preparation_acquisition_WLX2(&pparam_pgm, &param_connection, &pconfig_all, &pshared)==0)
+	{
+		printf("%s\n","... Echec de la préparation");
+		goto fin_main;
+	}
+	printf("%s \n\n","... ok: l'acquisition des données peut être lancée");
+	sleep(1);
+
+
+	/*----------------------------------------------------------------  */
+	printf("%s\n","o Lancement de l'acquisition des données: ...");
+//@TODO ; cette condition n'est pas possible, lancement renvoie -1,1 ou une ERROR
+	if (Lancement_thread_acquistion(&pparam_pgm)==0)
+	{
+		printf("%s\n","... Echec de l'acquisition des données");
+		goto fin_main;
+	}
+	printf("%s \n\n","... ok: fin de l'acquisition ");
+
+	pthread_mutex_destroy(&mutex);
+	pthread_exit(NULL);
+
+
+	/*----------------------------------------------------------------  */
+
+
+fin_main:;
+
+
+	 printf("%s\n","o Fermeture de la connexion avec WLX2: ...");
+	 //Reset_connexion(&param_connection);
+
+	 //printf("%s\n","Bye Bye");
+}
+#endif
 void * acq_WLX2(void * args)
 {
 	uint8_t *alive = args;
@@ -190,7 +190,8 @@ void * acq_WLX2(void * args)
 				ch_offset, ch_value, &mutex)
 			|| !Preparation_acquisition_WLX2(&pparam_pgm, 
 			      &param_connection, &pconfig_all, &pshared)
-			|| !Lancement_thread_acquistion(&pparam_pgm)
+			|| !Configuration_WLX2(&param_connection, &pconfig_all)
+			//|| !Lancement_thread_acquistion(&pparam_pgm)
 			)
 //	{
 //		pthread_exit(0);

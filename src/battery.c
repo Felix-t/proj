@@ -5,10 +5,10 @@ static void set_acq_time(int32_t volt, double *value);
 static uint8_t check_battery(int32_t volt);
 static void battery_cleanup(void * arg);
 
-struct cleanup_args{
+typedef struct cleanup_args{
 	FILE * fp;
 	_Atomic uint8_t *alive;
-};
+} cleanup_args;
 
 static void battery_cleanup(void * arg)
 {
@@ -21,35 +21,34 @@ static void battery_cleanup(void * arg)
 }
 
 /* Starting point for the thread managing power of the system
- * Use the ADS1256 interface to capture voltage and extrapolate remaining battery power
- * Params : None
- * Return : None
+ * Use the ADS1256 interface to capture voltage
+ * Using the configuration file, decide when to shutdown the raspberry pi 
+ * and update the config
 */
 void *battery(void *arg)
 {
 
 	int32_t volt = -1;
 	int32_t adc;
-	int32_t retval;
 	int32_t i;
 	FILE *fp;
-	printf("Battery thread ID : %i\n", syscall(__NR_gettid));
+	printf("Battery thread ID : %li\n", syscall(__NR_gettid));
 	time_t t;
 	//struct timespec tt;
 	//tt.tv_sec = 0;
 	//tt.tv_nsec = (long) 1000000000.0/MEASURE_FREQUENCY;
-	struct cleanup_args *args;
-	args->alive = arg;
-	*(args->alive) = 1;
+	cleanup_args args;
+	args.alive = arg;
+	*(args.alive) = 1;
 	fp = fopen(PATH_VOLT_LOGS, "a+");
-	args->fp = fp;
+	args.fp = fp;
 	
-	pthread_cleanup_push(battery_cleanup, (void*) args);
+	pthread_cleanup_push(battery_cleanup, (void*) &args);
 
 	if(!ad_board_setup())
 	{
 		printf("init failed\n");
-		pthread_exit((void *) retval);
+		pthread_exit((void *) 0);
 	}
 	while(volt == -1 || check_battery(volt) )
 	{
@@ -62,7 +61,7 @@ void *battery(void *arg)
 		}
 		volt = (adc * 100) / 167;
 		t = time(NULL);
-		fprintf(fp, "%s, %ld.%03ld %03ld V \r\n", ctime(&t), 
+		fprintf(fp, "%s, %i.%03i %03i V \r\n", ctime(&t), 
 				volt /1000000, (volt%1000000)/1000, volt%1000); 
 		fflush(fp); // To fprint immediately
 		if(volt < 0)
@@ -72,6 +71,7 @@ void *battery(void *arg)
 	
 //	set_next_startup(100); //@TODO : 100 for testing
 	pthread_cleanup_pop(1);
+	pthread_exit((void *) 1);
 }
 
 /*
@@ -81,9 +81,14 @@ void *battery(void *arg)
  */
 static uint8_t check_battery(int32_t volt)
 {
-	static double value[4] = {0,0,0,0};
-
+	static double value[NB_CFG_BATTERY] = {0,0,0,0,0};
+	static int32_t start_volt = 0;
 	static time_t start_time = NULL;
+	static double treshold;
+
+	if(start_volt == 0)
+		start_volt = volt;
+
 	if(!start_time)
 	{
 		printf("start time init\n");
@@ -93,19 +98,15 @@ static uint8_t check_battery(int32_t volt)
 	//Initialize value[] with the variables from the configuration file
 	if (value[MAX_VOLT] == 0)
 	{
-		char *str[4] = {"MAX_VOLT", "TRESHOLD", "LAST_DISCHARGE","ACQ_TIME"};
-		get_cfg(value, str,  4);
-		printf("MAX_VOLT : %f, TRESHOLD : %f%\n", value[0], value[1]*100);
+		//Order of string here should be same order as in cfg.h enum
+		char *str[NB_CFG_BATTERY] = {"MAX_VOLT", "MIN_VOLT",
+			"THRESHOLD", "LAST_DISCHARGE","ACQ_TIME",};
+		get_cfg(value, str,  NB_CFG_BATTERY);
 		set_acq_time(volt, value);
+		treshold = value[MIN_VOLT] + 
+			(value[MAX_VOLT] - value[MAX_VOLT])*value[THRESHOLD];
 	}
-	//If voltage is less than fixed threshold, shutdown the raspberry pi
-	if (volt/1000000 < value[MAX_VOLT]*value[TRESHOLD])
-	{
-		char *str[1] = {"ACQ_TIME"};
-		value[ACQ_TIME] = difftime(time(NULL), start_time); 
-		set_cfg(str, &value[ACQ_TIME], 1);
-		return 0;
-	}
+
 	// Update configuration MAX_VALUE if actual voltage is >	
 	else if (volt/1000000 > value[MAX_VOLT]) 
 	{
@@ -114,11 +115,19 @@ static uint8_t check_battery(int32_t volt)
 		set_cfg(str, &value[MAX_VOLT], 1); 
 	}
 
-	//@TODO : save config
-
-	// If Acq_time is over, shutdown the raspberry pi
-	if(difftime(time(NULL), start_time) > value[ACQ_TIME]*0.97) //097?
+	//If voltage is less than fixed threshold or acq_time has been reached,
+	//save config and shutdown the raspberry pi
+	if (volt/1000000 < treshold
+			|| difftime(time(NULL), start_time) > value[ACQ_TIME])
+	{
+		char *str[2] = {"ACQ_TIME", "LAST_DISCHARGE"};
+		double tmp_value[2];
+		tmp_value[0] = difftime(time(NULL), start_time);
+		tmp_value[1] = (volt - start_volt)/1000000;
+		set_cfg(str, tmp_value, 2);
+		set_next_startup((int32_t) (24*3600-tmp_value[0]));
 		return 0;
+	}
 
 	return 1;
 }
@@ -134,7 +143,7 @@ static void set_acq_time(int32_t volt, double *value)
 	char *str[1] = {"ACQ_TIME"};
 	double expected_volt = volt/1000000 -
 	       		       value[LAST_DISCHARGE] - 
-			       value[TRESHOLD]*value[MAX_VOLT];
+			       value[THRESHOLD]*value[MAX_VOLT];
 	if(expected_volt > 0)
 		value[ACQ_TIME] = value[ACQ_TIME] * 1.1;
 	else if(expected_volt <  0)

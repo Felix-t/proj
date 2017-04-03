@@ -14,10 +14,11 @@
 #include "headers.h"
 #include "util.h"
 
-enum {MAX_VOLT,    		//Battery volt capacity
-     TRESHOLD,    		//Battery treshold
-     LAST_DISCHARGE, 		//Discharge volt last acquisition
-     ACQ_TIME};     		//Discharge time last acquisition
+enum {MAX_VOLT,	//Battery volt capacity
+	MIN_VOLT,
+	THRESHOLD,    		//Battery 
+	LAST_DISCHARGE, 		//Discharge volt last acquisition
+	ACQ_TIME};     		//Discharge time last acquisition
 
 
 void get_cfg_str(const char **values, char **str,int32_t str_nb);

@@ -20,11 +20,12 @@ int Configuration_WLX2(struct parametres_connexion *param_connection, struct con
 		ok=Configuration_WLX2_channel(param_connection, pconfig_all);
 	}
 
-	if (ok)
-	{
-		ok=Configuration_WLX2_date_time(param_connection);;
-	}
+//	if (ok)
+//	{
+//		ok=Configuration_WLX2_date_time(param_connection);;
+//	}
 
+	printf("End Configuration_WLX2 : %i", ok);
 
 	return ok;
 }

@@ -27,15 +27,13 @@ void get_cfg_double(double *values, char **str, int32_t str_nb)
 {
 	int32_t i;
 	config_t config;
-	config_setting_t *setting_root, *path;
+	config_setting_t *setting_root;
 
 	init_cfg(&config, &setting_root);
 
 	for(i = 0; i<str_nb; i++)
 	{
 		config_lookup_float(&config, str[i], &values[i]);
-	//	if((path = config_lookup(&config, str[i])) != NULL)
-	//		values[i] = config_setting_get_float(path);
 
 	}
 }
@@ -48,15 +46,13 @@ void get_cfg_str(const char **values, char **str, int32_t str_nb)
 {
 	int32_t i;
 	config_t config;
-	config_setting_t *setting_root, *path;
+	config_setting_t *setting_root;
 
 	init_cfg(&config, &setting_root);
 
 	for(i = 0; i<str_nb; i++)
 	{
 		config_lookup_string(&config, str[i], values);
-	//	if((path = config_lookup(&config, str[i])) != NULL)
-	//		values[i] = config_setting_get_float(path);
 
 	}
 }

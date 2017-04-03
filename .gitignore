@@ -1,4 +1,5 @@
 obj/
+Interrogateur_Opsens/Objet/*
 bin/
 conftest
 *.txt

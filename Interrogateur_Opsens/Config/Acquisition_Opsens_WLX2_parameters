@@ -1,8 +1,8 @@
 nom_projet: SURFFEOL
-nom_fichier_sauvegarde: fichier_sauvegarde
+nom_fichier_sauvegarde: data_WLX2
 taille_max_du_fichier_sauvegarde: 5000.0
 Sauvergarde_cle_usb: 1
-Chemin_cle_usb: /home/pi/projet/logs
+Chemin_cle_usb: /home/pi/projet/Data
 SMS_alert: 1
 mode_meas: 0
 mode_debug: 0

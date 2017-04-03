@@ -55,10 +55,10 @@ int Make_and_test_connexion(struct parametres_connexion *param_connection, int o
 /********************************************************/
 int Init_connexion(struct parametres_connexion *param_connection)
 {
-	int ok;
+	int ok = 1;
 	char command[100]="sh Source/Script__Init_Connexion_Opsens_WLX2.sh";
 
-	ok=Execute_file_sh(command);
+	//ok=Execute_file_sh(command);
 
 	if (ok)
 	{
@@ -296,7 +296,6 @@ int Envoi_command(struct parametres_connexion *param_connection, const char *com
 {
 	int ok=1,size_cmd;
 
-
 	struct public_command_scpi cmd =
 	{
 		.DataID=0,
@@ -311,7 +310,6 @@ int Envoi_command(struct parametres_connexion *param_connection, const char *com
 	}
 
 	size_cmd=sizeof(struct public_command_scpi)-(_SEND_BUFF_SIZE-cmd.CommandSize);
-
 	//printf("oooo%s\n",cmd.Client_command);
 	if(sendto(param_connection->ID_socket_command, &cmd, size_cmd, 0, (struct sockaddr *)&param_connection->Server_Address,sizeof(param_connection->Server_Address))==-1) 
 	{

@@ -122,6 +122,9 @@
 //setup in the hardware
 #define INPUT_DATA_RATE		50 //Hz	
 
+#define UP_SCALE 		0.8
+#define DOWN_SCALE 		0.2
+
 #define QUEUE_SIZE 		200
 
 struct acq_cleanup_args{
@@ -147,10 +150,9 @@ struct data_acq{
 	int16_t x_mag;
 	int16_t y_mag;
 	int16_t z_mag;
-	uint8_t write;
+	uint16_t info;
 };
 
-typedef enum {OK, READ_FAIL, WRITE_FAIL, ACC_FAIL, GYR_FAIL, MAG_FAIL, FAIL}  error_code;
 
 enum instrument {ACC,GYR,MAG};
 

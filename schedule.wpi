@@ -1,0 +1,6 @@
+# Turn on Raspberry Pi for 1 hour, in every 2 days
+
+BEGIN	2015-08-01 00:00:00
+END	2025-07-31 23:59:59
+OFF	WAIT	
+ON	H2

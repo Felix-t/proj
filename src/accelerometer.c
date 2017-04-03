@@ -18,6 +18,8 @@ static uint8_t readReg(uint8_t device_address, uint8_t reg, uint8_t *value);
 static scale_config *get_scale();
 static void acq_cleanup(void *arg);
 static void print_cleanup(void *arg);
+static uint8_t change_scale(int16_t x, int16_t y, int16_t z);
+
 
 /* Function : parse the data from the LSM9DS0 registers to get readable values
  * Params : 
@@ -39,6 +41,68 @@ static uint8_t get_axes_data(uint8_t *data, int16_t * buffer, double scale)
 
 }
 
+
+/* Function : Change the scale if the data >80% current scale or  <20% current
+ * scale, to prevent/reduce overflow
+ * Params :x, y, z are the accelerometer average or values
+ * Return : 0 if no change needed, 1 otherwise
+*/
+static uint8_t change_scale(int16_t x, int16_t y, int16_t z)
+{
+	static int16_t max = 0;
+	static int16_t min = 0;
+	scale_config new_scale;
+	float value = get_scale()[ACC].value;
+	uint8_t reg = get_scale()[ACC].reg_config;
+	if (max == 0)
+		max = value*UP_SCALE;
+	if (min == 0)
+		min = value*DOWN_SCALE;
+	if(x > max || y > max || z > max)
+	{
+		switch (get_scale()[ACC].reg_config)
+		{
+			case 0:
+				new_scale = SCALE_ACC_4G;
+				break;
+			case 8:
+				new_scale = SCALE_ACC_6G;
+				break;
+			case 16:
+				new_scale = SCALE_ACC_8G;
+				break;
+			case 24:
+				new_scale = SCALE_ACC_16G;
+				break;
+		}
+	}
+	else if(x > min || y > min || z > min)
+	{
+		switch (get_scale()[ACC].reg_config)
+		{
+			case 8:
+				new_scale = SCALE_ACC_2G;
+				break;
+			case 16:
+				new_scale = SCALE_ACC_4G;
+				break;
+			case 24:
+				new_scale = SCALE_ACC_6G;
+				break;
+			case 32:
+				new_scale = SCALE_ACC_8G;
+				break;
+		}
+	}
+	else return 0;
+
+	set_scale(ACC,  new_scale);
+	max = new_scale.value*UP_SCALE;
+	min = new_scale.value*DOWN_SCALE;
+	return 1;
+}
+
+
 /* Function : write something in a register through i2c
  * 	See datasheet LSM9DS0 p33 for register adress and write cmd info
  * Params : 
@@ -51,7 +115,7 @@ static uint8_t writeReg(uint8_t device_address, uint8_t reg, uint8_t *value)
 {
 	uint32_t i;
 	size_t length = sizeof(value);
-	uint8_t toSend[length+1];
+	char toSend[length+1];
 	uint8_t return_code;
 
 	// If MSB of the reg adress = 1, multiple write
@@ -60,26 +124,30 @@ static uint8_t writeReg(uint8_t device_address, uint8_t reg, uint8_t *value)
 
 	toSend[0] = reg;
 	for(i = 0;i<length;i++)
-		toSend[i+1] = value[i];
+		toSend[i+1] = (char) value[i];
 
 	bcm2835_i2c_setSlaveAddress(device_address);
 	return_code = bcm2835_i2c_write(toSend, length+1);
 	switch(return_code){
 		case BCM2835_I2C_REASON_ERROR_NACK:
 			printf("Non acknowledge\n");
+			return 0;
 			break;
 		case BCM2835_I2C_REASON_ERROR_CLKT:
 			printf("Clock sketch timeout\n");
+			return 0;
 			break;
 		case BCM2835_I2C_REASON_ERROR_DATA:
 			printf("Data missing\n");
+			return 0;
 			break;
 		case BCM2835_I2C_REASON_OK:
 			//printf("Success");
 			break;
 	}
-	return return_code;
+	return 1;
 }
+
 
 /* Function : read something in a register through i2c
  * 	See datasheet LSM9DS0 p33 for register adress and read cmd info
@@ -91,7 +159,6 @@ static uint8_t writeReg(uint8_t device_address, uint8_t reg, uint8_t *value)
  */
 static uint8_t readReg(uint8_t device_address, uint8_t reg, uint8_t *value)
 {
-	uint32_t i;
 	size_t length = 6;
 	uint8_t return_code;
 
@@ -99,23 +166,27 @@ static uint8_t readReg(uint8_t device_address, uint8_t reg, uint8_t *value)
 	if (length > 1)
 		reg = reg | 128;
 	bcm2835_i2c_setSlaveAddress(device_address);
-	return_code = bcm2835_i2c_read_register_rs(&reg, value, length);
+	return_code = bcm2835_i2c_read_register_rs((char *)&reg,(char *) value, length);
 	switch(return_code){
 		case BCM2835_I2C_REASON_ERROR_NACK:
 			printf("Non acknowledge\n");
+			return 0;
 			break;
 		case BCM2835_I2C_REASON_ERROR_CLKT:
 			printf("Clock sketch timeout\n");
+			return 0;
 			break;
 		case BCM2835_I2C_REASON_ERROR_DATA:
 			printf("Data missing\n");
+			return 0;
 			break;
 		case BCM2835_I2C_REASON_OK:
 			//printf("Success\n");
 			break;
 	}
-	return return_code;
+	return 1;
 }
+
 
 /* Function : Initialize and return a pointer indicating current scales
  * Return : array of scale_config[ACC/GYR/MAG]
@@ -133,6 +204,7 @@ static scale_config *get_scale()
 	return scale;
 }
 
+
 static void acq_cleanup(void *arg)
 {	
 	printf("LSM9DS0 cleanup routine");
@@ -143,15 +215,15 @@ static void acq_cleanup(void *arg)
 	free(ptr->buffer[0]);
 	free(ptr->buffer);
 	*(ptr->alive) = 0;	
-	//@TODO : set ALIVE shared var to 0
 }
+
 
 static void print_cleanup(void *arg)
 {
 	printf("USB data writing cleanup routine");
 	fclose((FILE *) arg);
-	//@TODO : set ALIVE shared var to 0
 }
+
 
 uint8_t set_scale(enum instrument inst, scale_config new_scale)
 {
@@ -162,6 +234,7 @@ uint8_t set_scale(enum instrument inst, scale_config new_scale)
 	scale[inst].reg_config = new_scale.reg_config;
 	return 1;
 }
+
 
 uint8_t read_all(int16_t **buffer)
 {
@@ -184,10 +257,9 @@ uint8_t read_all(int16_t **buffer)
 	return 1;
 }
 
+
 uint8_t read_accelerometer(int16_t *buffer)
 {
-	uint8_t i;
-
 	float scale_value = get_scale()[ACC].value;
 
 	// 6 registers containing data : 8msb x, 8 lsb x, 8 msb y, ...
@@ -199,10 +271,9 @@ uint8_t read_accelerometer(int16_t *buffer)
 	return 0;
 }
 
+
 uint8_t read_gyrometer(int16_t *buffer)
 {
-	uint8_t i;
-
 	float scale_value = get_scale()[GYR].value;
 
 	// 6 registers containing data : 8msb x, 8 lsb x, 8 msb y, ...
@@ -214,10 +285,9 @@ uint8_t read_gyrometer(int16_t *buffer)
 	return 0;
 }
 
+
 uint8_t read_magnetometer(int16_t *buffer)
 {
-	uint8_t i;
-
 	float scale_value = get_scale()[MAG].value;
 
 	// 6 registers containing data : 8msb x, 8 lsb x, 8 msb y, ...
@@ -228,6 +298,7 @@ uint8_t read_magnetometer(int16_t *buffer)
 	}
 	return 0;
 }
+
 
 uint8_t setup_all()
 {
@@ -253,20 +324,20 @@ uint8_t setup_all()
 	return 1;
 }
 
+
 uint8_t setup_accelerometer()
 {
 	uint8_t config_reg;
-	uint8_t i;
 
 	// continuous update & 50Hz data rate - z,y,x axis enabled, 
 	config_reg = 0b01010111;	       
-	if(writeReg(ACC_ADDRESS, CTRL_REG1_XM, &config_reg) != OK)
+	if(!writeReg(ACC_ADDRESS, CTRL_REG1_XM, &config_reg))
 	{
 		return 0;
 	}
 	// Bandwidth anti-alias 773Hz, 16G scale, self test normal mode
 	config_reg = get_scale()[ACC].reg_config;
-	if(writeReg(ACC_ADDRESS, CTRL_REG2_XM, &config_reg) != OK)
+	if(!writeReg(ACC_ADDRESS, CTRL_REG2_XM, &config_reg))
 	{
 		return 0;
 	}
@@ -274,21 +345,21 @@ uint8_t setup_accelerometer()
 	return 1;
 }
 
+
 uint8_t setup_gyrometer()
 {
 	uint8_t config_reg;
-	uint8_t i;
 
 	// 95 Hz output datarate, 12.5 cutoff - normal mode - z,y,x axis enabled 
 	config_reg = 0b00001111;	       
-	if(writeReg(GYR_ADDRESS, CTRL_REG1_G, &config_reg) != OK)
+	if(!writeReg(GYR_ADDRESS, CTRL_REG1_G, &config_reg))
 	{
 		return 0;
 	}
 
 	// Continuous update, scale 245dps
 	config_reg = get_scale()[GYR].reg_config;
-	if(writeReg(GYR_ADDRESS, CTRL_REG4_G, &config_reg) != OK)
+	if(!writeReg(GYR_ADDRESS, CTRL_REG4_G, &config_reg))
 	{
 		return 0;
 	}
@@ -296,24 +367,24 @@ uint8_t setup_gyrometer()
 	return 1;
 }
 
+
 uint8_t setup_magnetometer()
 {
 	uint8_t config_reg;
-	uint8_t i;
 
 	// temperature enable - Mag high res - 50 Hz output datarate
 	config_reg = 0b11110000;
-	if(writeReg(MAG_ADDRESS, CTRL_REG5_XM, &config_reg) != OK)
+	if(!writeReg(MAG_ADDRESS, CTRL_REG5_XM, &config_reg))
 		return 0;
 
 	// Magnetic full scale
 	config_reg = get_scale()[MAG].reg_config;
-	if(writeReg(MAG_ADDRESS, CTRL_REG6_XM, &config_reg) != OK)
+	if(!writeReg(MAG_ADDRESS, CTRL_REG6_XM, &config_reg))
 		return 0;
 
 	// mode continuous for magnetic sensor (enable mag sensor) 
 	config_reg = 0;    
-	if(writeReg(MAG_ADDRESS, CTRL_REG7_XM, &config_reg) != OK)
+	if(!writeReg(MAG_ADDRESS, CTRL_REG7_XM, &config_reg))
 		return 0;
 	return 1;
 }
@@ -321,7 +392,7 @@ uint8_t setup_magnetometer()
 
 void *acq_GYR_ACC(void * arg)
 {
-	printf("Thread LSM9D0 created id : %i\n", syscall(__NR_gettid));
+	printf("Thread LSM9D0 created id : %li\n", syscall(__NR_gettid));
 
 	struct timespec tt;
 	tt.tv_sec = 0;
@@ -330,20 +401,13 @@ void *acq_GYR_ACC(void * arg)
 	uint8_t i, pos = 0;
 	uint8_t nb_acq = MAG_ACQ ? 3 : 2; //3 if magnetometer is used
 	int16_t **buffer; //contains the data from the LSMD9
-
+	int16_t x, y, z;
 	struct data_acq message_queue[QUEUE_SIZE];
 
 	pthread_t print_thread;
 
-	// Setup the cleanup handlers
-	struct acq_cleanup_args *args;
-	args->alive = arg;
-	*args->alive = 1;
-	args->buffer = buffer;
-	args->print_thread = &print_thread;
-	pthread_cleanup_push(acq_cleanup, args);
-
-	//Allocate mem for the message queue
+	// Allocate mem to buffer getting data from sensors :
+	// x, y, z for ACC, GYR, (MAG)
 	if((buffer = malloc(nb_acq * 3 * sizeof(int16_t *))) == NULL 
 			|| nb_acq == 0)
 	{
@@ -357,6 +421,15 @@ void *acq_GYR_ACC(void * arg)
 	}
 	for(i = 1; i < nb_acq; i++)
 		buffer[i] = buffer[0] + i * 3;
+
+
+	// Setup the cleanup handlers
+	struct acq_cleanup_args args;
+	args.alive = arg;
+	*args.alive = 1;
+	args.buffer = buffer;
+	args.print_thread = &print_thread;
+	pthread_cleanup_push(acq_cleanup, &args);
 
 
 	// Setup i2c, then setup ctrl registers of the lsm9ds0, create thread
@@ -374,7 +447,6 @@ void *acq_GYR_ACC(void * arg)
 	{
 		read_all(buffer);
 		message_queue[pos].acq_time = time(NULL);
-		nanosleep(&tt, NULL);
 		//ADD to queue
 		message_queue[pos].x_acc = buffer[0][0];
 		message_queue[pos].y_acc = buffer[0][1];
@@ -388,18 +460,36 @@ void *acq_GYR_ACC(void * arg)
 			message_queue[pos].y_mag = buffer[2][1];
 			message_queue[pos].z_mag = buffer[2][2];
 		}
-		message_queue[pos].write = 1;
-		pos = pos++ == 199 ? 0 : pos;
+		message_queue[pos].info = 1;
+		x += buffer[0][0] / QUEUE_SIZE;
+		y += buffer[0][1] / QUEUE_SIZE;
+		z += buffer[0][2] / QUEUE_SIZE;
+		if(pos++ == QUEUE_SIZE)
+		{
+			pos = 0;
+			if(change_scale(x, y, z))
+			{
+				setup_all();
+				message_queue[pos++].info = 
+					get_scale()[ACC].value*1000;
+			}
+			x = 0;
+			y = 0;
+			z = 0;
+		}
+		nanosleep(&tt, NULL);
 	}
 
 	pthread_cleanup_pop(1);
+	pthread_exit((void *) 1);
 }
 
 
 void *print_to_file(void * arg)
 {
-	printf("Thread saving to file created, id : %i\n",
+	printf("Thread saving to file created, id : %li\n",
 			syscall(__NR_gettid));
+
 	struct timespec tt;
 	tt.tv_sec = 0;
 	tt.tv_nsec = (long) 1000000000.0/INPUT_DATA_RATE;
@@ -408,8 +498,8 @@ void *print_to_file(void * arg)
 	char *cfg = "PATH_LSM9DS0_DATA";
 	FILE *fp;
 	//transfer from i2c thread to print thread is done through a message
-	//queue which contains up to 200 records. This thread reads data when 
-	//the message_queue[i].write var is set to 1.
+	//queue which contains up to QUEUE_SIZE records. 
+	// This thread reads data when message_queue[i].info var is set to 1.
 	struct data_acq *message_queue = (struct data_acq*) arg;
 	uint8_t pos = 0;
 
@@ -433,7 +523,7 @@ void *print_to_file(void * arg)
 		//Try to print at the same rate data is send by i2c
 		nanosleep(&tt, NULL);
 
-		while(message_queue[pos].write == 1)
+		while(message_queue[pos].info == 1)
 		{	
 			fprintf(fp, "%li,", &message_queue[pos].acq_time);
 			if(MAG_ACQ)
@@ -448,12 +538,21 @@ void *print_to_file(void * arg)
 					message_queue[pos].x_gyr,
 					message_queue[pos].y_gyr,
 					message_queue[pos].z_gyr);
-			message_queue[pos].write = 0;
-			//Garder pos entre 0 et 200
-			pos = pos++ == 199 ? 0 : pos;
+			message_queue[pos].info = 0;
+			//Garder pos entre 0 et QUEUE_SIZE
+			pos = pos++ == QUEUE_SIZE ? 0 : pos;
 		}
+
+		if(message_queue[pos].info > 1)
+		{
+			fprintf(fp, "%f\n", message_queue[pos].info/1000.0);
+			message_queue[pos].info = 0;
+			pos = pos++ == QUEUE_SIZE ? 0 : pos;
+		}
+
 	}
 	pthread_cleanup_pop(1);
+	pthread_exit((void *) 1);
 }
 
 
