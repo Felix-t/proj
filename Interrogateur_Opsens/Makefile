@@ -13,8 +13,8 @@ CONF = Config
 EXEC = Programme_Acquisition_Opsens_WLX2
 SCRIPT= Script_Kill_All_Process_Opsens_WLX2.sh
 CC = gcc
-CFLAGS = -I$(DINC)
-LIBS= -lm -lpthread
+CFLAGS = -I$(DINC) -Wall
+LIBS= -lm -lpthread -libconfig
 
 SRC = $(wildcard $(DSRC)/*.c)
 _OBJ= $(SRC:.c=.o)

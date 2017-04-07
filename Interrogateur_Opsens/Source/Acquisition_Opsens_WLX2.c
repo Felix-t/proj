@@ -49,7 +49,7 @@ int Open_file_Enregistrement_data(struct param_pgm *param)
 		Print_Entete_file_Enregistrement_data(param);
 	}
 
-
+	free(nomfic_save);
 
 	return ok;
 }
@@ -480,6 +480,8 @@ int Zero_sensor(struct parametres_connexion *param_connection, int ch1_zero, int
 			ok=Compare_2str(reponse_ok, answer_2[0]);
 		}else{goto fin_zero_sensor; }
 	}
+	
+	printf("Sensor zeroed\n");
 
 
 fin_zero_sensor: ;
@@ -521,7 +523,6 @@ int Get_zero_sensor(struct parametres_connexion *param_connection, int ch_zero, 
 
 	if (ch_zero==1){sscanf(answer_2[0],"%f",zero_channel);}
 	if (ch_zero==2){sscanf(answer_2[1],"%f",zero_channel);}
-
 
 fin_get_zero_sensor: ;
 
@@ -813,7 +814,8 @@ void* thread_Enregistrement_data (void* arg)
 				t_add=localtime(&curtime_add);
 				//    printf("%d***%02d/%02d/%04d  %02d:%02d:%02d.%03d\n",i, t_add->tm_mday,t_add->tm_mon,t_add->tm_year+1900,t_add->tm_hour, t_add->tm_min,t_add->tm_sec,tp_add.tv_usec/1000);
 
-				sprintf(str_date_time,"%02d/%02d/%04d  %02d:%02d:%02d.%03ld\t", t_add->tm_mday,t_add->tm_mon,t_add->tm_year+1900,t_add->tm_hour, t_add->tm_min,t_add->tm_sec,tp_add.tv_usec/1000); 
+				//sprintf(str_date_time,"%02d/%02d/%04d  %02d:%02d:%02d.%03ld\t", t_add->tm_mday,t_add->tm_mon,t_add->tm_year+1900,t_add->tm_hour, t_add->tm_min,t_add->tm_sec,tp_add.tv_usec/1000); 
+				sprintf(str_date_time, "%li\t", time(NULL));
 				strcat(String_SendMeasureType_t,str_date_time); 
 
 				for(j=0;j<NB_CH;j++)
@@ -845,6 +847,7 @@ void* thread_Enregistrement_data (void* arg)
 
 				strcat(String_SendMeasureType_t,"\n");  //  printf("%s\n",String_SendMeasureType_t);
 
+
 				nb_meas++;
 				pthread_mutex_lock(p_data->pshared->mutex);
 				p_data->pshared->nb_meas_done=nb_meas;
@@ -860,19 +863,19 @@ void* thread_Enregistrement_data (void* arg)
 
 			}
 
+			// @ TODO pour ref l'addition de qqc
+			stats(&SendMeasureType_t_ch[0], &SendMeasureType_t_ch[1], nb_data_by_paquet);
+
 			pthread_mutex_lock(p_data->pshared->mutex);
 			size_written=fprintf(fp,"%s",String_SendMeasureType_t);
 			fflush(stdout);
 			p_data->pshared->size_save_file=size_file+size_written;
 			pthread_mutex_unlock(p_data->pshared->mutex);
 			//printf("%s\n",String_SendMeasureType_t);
-
 		}
-
 
 		//sleep(1.0);
 		//size_written=fprintf(fp,"%f %f %f\n",size_file,p_data->pshared->size_save_file,size_max_save_file);
-
 
 
 		if (p_data->pshared->size_save_file >= size_max_save_file)
@@ -914,6 +917,41 @@ fin_enregistrement:;
 		   //return ok;
 }
 
+
+//@TODO : bouger ca :
+#define STATS_INTERVAL 2 //imprimer tout les STATS INTERVAL packets
+
+void stats(struct stUDPSendMeasureType_t *ch1, struct stUDPSendMeasureType_t *ch2, int nb_measures)
+{
+	int i = 0, nb_data = nb_measures*STATS_INTERVAL;
+	static int count = 0;
+	int tmp1;
+	static double sum = 0, squared_sum = 0;
+	static double sum2 = 0, squared_sum2 = 0;
+	for(i=0;i<nb_measures;i++)
+	{
+		sum += ((double)ch1->fMeasure[i]);
+		squared_sum += ((double)ch1->fMeasure[i])*((double)ch1->fMeasure[i]);
+		sum2 +=((double) ch2->fMeasure[i]);
+		squared_sum2 +=(double) ch2->fMeasure[i]*((double)ch2->fMeasure[i]);
+	}
+
+	if(++count == STATS_INTERVAL)
+	{	
+
+		printf("Moyennes : %lf\t%lf\n", sum/nb_data,
+			       sum2/nb_data);
+		printf("Ecarts type : %lf\t%lf\n", sqrt(squared_sum/nb_data
+				       - (sum/nb_data)*(sum/nb_data)),
+			       sqrt(squared_sum2/nb_data -
+				       (sum2/nb_data)*(sum2/nb_data)));
+		sum = 0;
+		sum2 = 0;
+		squared_sum = 0;
+		squared_sum2 = 0;
+		count = 0;
+	}
+}
 
 
 /********************************************************/

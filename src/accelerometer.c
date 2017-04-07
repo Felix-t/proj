@@ -12,22 +12,25 @@
  */
 
 #include "accelerometer.h"
-static uint8_t get_axes_data(uint8_t *data, int16_t * buffer, double scale);
+static void get_axes_data(uint8_t *data, float * buffer, double scale);
 static uint8_t writeReg(uint8_t device_address, uint8_t reg, uint8_t *value);
 static uint8_t readReg(uint8_t device_address, uint8_t reg, uint8_t *value);
 static scale_config *get_scale();
 static void acq_cleanup(void *arg);
 static void print_cleanup(void *arg);
 static uint8_t change_scale(int16_t x, int16_t y, int16_t z);
+static void stat(int16_t x, int16_t y, int16_t z, uint8_t reset);
 
 
 /* Function : parse the data from the LSM9DS0 registers to get readable values
  * Params : 
  * 	-uint8_t *data : contains the 6 bytes of raw data taken from the LSM9DS0 
  * 	-uint8_t *buffer : 3*16bits signed containing the correct values
+ * 	-double scale : scale_config.value, conversion rate mG/digit 
+ * 			(or dps/digit, Gauss/digit)
  * Return : error_code
  */
-static uint8_t get_axes_data(uint8_t *data, int16_t * buffer, double scale)
+static void get_axes_data(uint8_t *data, float * buffer, double scale)
 {
 	uint8_t i;
 
@@ -37,8 +40,6 @@ static uint8_t get_axes_data(uint8_t *data, int16_t * buffer, double scale)
 		buffer[i] = (int16_t) (data[2*i] | (data[2*i+1] << 8));
 		buffer[i] *= scale;
 	}
-	return 1;
-
 }
 
 
@@ -49,18 +50,37 @@ static uint8_t get_axes_data(uint8_t *data, int16_t * buffer, double scale)
 */
 static uint8_t change_scale(int16_t x, int16_t y, int16_t z)
 {
-	static int16_t max = 0;
-	static int16_t min = 0;
+	float range;
 	scale_config new_scale;
 	float value = get_scale()[ACC].value;
 	uint8_t reg = get_scale()[ACC].reg_config;
-	if (max == 0)
-		max = value*UP_SCALE;
-	if (min == 0)
-		min = value*DOWN_SCALE;
-	if(x > max || y > max || z > max)
+	//if (max == 0)
+		//max = value*UP_SCALE;
+	//if (min == 0)
+		//min = value*DOWN_SCALE;
+		//if(x > max || y > max || z > max)
+		//{
+	switch (reg)
 	{
-		switch (get_scale()[ACC].reg_config)
+		case 0:
+			range = 2.0;
+			break;
+		case 8:
+			range = 4.0;
+			break;
+		case 16:
+			range = 6.0;
+			break;
+		case 24:
+			range = 8.0;
+			break;
+		case 32:
+			range = 16.0;
+			break;
+	}
+	if(x < range*UP_SCALE || y < range*UP_SCALE || z < range*UP_SCALE)
+	{
+		switch (reg)
 		{
 			case 0:
 				new_scale = SCALE_ACC_4G;
@@ -76,9 +96,9 @@ static uint8_t change_scale(int16_t x, int16_t y, int16_t z)
 				break;
 		}
 	}
-	else if(x > min || y > min || z > min)
+	if(x < range*DOWN_SCALE || y < range*DOWN_SCALE || z < range*DOWN_SCALE)
 	{
-		switch (get_scale()[ACC].reg_config)
+		switch (reg)
 		{
 			case 8:
 				new_scale = SCALE_ACC_2G;
@@ -94,11 +114,10 @@ static uint8_t change_scale(int16_t x, int16_t y, int16_t z)
 				break;
 		}
 	}
-	else return 0;
+	else 
+		return 0;
 
-	set_scale(ACC,  new_scale);
-	max = new_scale.value*UP_SCALE;
-	min = new_scale.value*DOWN_SCALE;
+	set_scale(ACC, new_scale);
 	return 1;
 }
 
@@ -236,7 +255,7 @@ uint8_t set_scale(enum instrument inst, scale_config new_scale)
 }
 
 
-uint8_t read_all(int16_t **buffer)
+uint8_t read_all(float **buffer)
 {
 	if (!read_accelerometer(buffer[0]))
 	{
@@ -258,7 +277,7 @@ uint8_t read_all(int16_t **buffer)
 }
 
 
-uint8_t read_accelerometer(int16_t *buffer)
+uint8_t read_accelerometer(float *buffer)
 {
 	float scale_value = get_scale()[ACC].value;
 
@@ -266,13 +285,14 @@ uint8_t read_accelerometer(int16_t *buffer)
 	uint8_t data[6];
 	if(readReg(ACC_ADDRESS, OUT_X_L_A, data) == BCM2835_I2C_REASON_OK)
 	{
-		return get_axes_data(data, buffer, scale_value);
+		get_axes_data(data, buffer, scale_value);
+		return 1;
 	}
 	return 0;
 }
 
 
-uint8_t read_gyrometer(int16_t *buffer)
+uint8_t read_gyrometer(float *buffer)
 {
 	float scale_value = get_scale()[GYR].value;
 
@@ -280,13 +300,14 @@ uint8_t read_gyrometer(int16_t *buffer)
 	uint8_t data[6];
 	if(readReg(GYR_ADDRESS, OUT_X_L_G, data) == BCM2835_I2C_REASON_OK)
 	{
-		return get_axes_data(data, buffer, scale_value);
+		get_axes_data(data, buffer, scale_value);
+		return 1;
 	}
 	return 0;
 }
 
 
-uint8_t read_magnetometer(int16_t *buffer)
+uint8_t read_magnetometer(float *buffer)
 {
 	float scale_value = get_scale()[MAG].value;
 
@@ -294,7 +315,8 @@ uint8_t read_magnetometer(int16_t *buffer)
 	uint8_t data[6];
 	if(readReg(MAG_ADDRESS, OUT_X_L_M, data) == BCM2835_I2C_REASON_OK)
 	{
-		return get_axes_data(data, buffer, scale_value);
+		get_axes_data(data, buffer, scale_value);
+		return 1;
 	}
 	return 0;
 }
@@ -398,30 +420,30 @@ void *acq_GYR_ACC(void * arg)
 	tt.tv_sec = 0;
 	tt.tv_nsec = (long) 1000000000.0/INPUT_DATA_RATE;
 
-	uint8_t i, pos = 0;
+	uint8_t i, pos = 0, nb_cycle = 0;
 	uint8_t nb_acq = MAG_ACQ ? 3 : 2; //3 if magnetometer is used
-	int16_t **buffer; //contains the data from the LSMD9
-	int16_t x, y, z;
+	float **buffer; //contains the data from the LSMD9
+	int64_t sum_square[3], sum[3];
+	double mean[3], std_dev[3];
 	struct data_acq message_queue[QUEUE_SIZE];
 
 	pthread_t print_thread;
 
 	// Allocate mem to buffer getting data from sensors :
-	// x, y, z for ACC, GYR, (MAG)
-	if((buffer = malloc(nb_acq * 3 * sizeof(int16_t *))) == NULL 
+	if((buffer = malloc(nb_acq * sizeof(float *))) == NULL 
 			|| nb_acq == 0)
 	{
 		printf("malloc failed\n");
 		return 0;
 	}
-	if((buffer[0] = malloc(3 * sizeof(int16_t))))
+	// (x, y, z) = 3 for (ACC, GYR, (MAG))=2or3 containing a float
+	if((buffer[0] = malloc(3 * nb_acq * sizeof(float))) == NULL)
 	{
 		printf("malloc failed\n");
 		return 0;
 	}
 	for(i = 1; i < nb_acq; i++)
 		buffer[i] = buffer[0] + i * 3;
-
 
 	// Setup the cleanup handlers
 	struct acq_cleanup_args args;
@@ -430,7 +452,6 @@ void *acq_GYR_ACC(void * arg)
 	args.buffer = buffer;
 	args.print_thread = &print_thread;
 	pthread_cleanup_push(acq_cleanup, &args);
-
 
 	// Setup i2c, then setup ctrl registers of the lsm9ds0, create thread
 	if(!setup_all() || pthread_create(&print_thread, NULL,	print_to_file,
@@ -460,30 +481,92 @@ void *acq_GYR_ACC(void * arg)
 			message_queue[pos].y_mag = buffer[2][1];
 			message_queue[pos].z_mag = buffer[2][2];
 		}
-		message_queue[pos].info = 1;
-		x += buffer[0][0] / QUEUE_SIZE;
-		y += buffer[0][1] / QUEUE_SIZE;
-		z += buffer[0][2] / QUEUE_SIZE;
+		message_queue[pos].read_allowed = 1;
+
 		if(pos++ == QUEUE_SIZE)
 		{
 			pos = 0;
-			if(change_scale(x, y, z))
-			{
-				setup_all();
-				message_queue[pos++].info = 
-					get_scale()[ACC].value*1000;
-			}
-			x = 0;
-			y = 0;
-			z = 0;
+			stat(buffer[0][0], buffer[0][1], buffer[0][2], 1);
 		}
+		else
+			stat(buffer[0][0], buffer[0][1], buffer[0][2], 0);
+
 		nanosleep(&tt, NULL);
 	}
 
-	pthread_cleanup_pop(1);
-	pthread_exit((void *) 1);
+pthread_cleanup_pop(1);
+pthread_exit((void *) 1);
 }
 
+static void stat(int16_t x, int16_t y, int16_t z, uint8_t reset)
+{
+	int32_t i;
+	static int64_t sum[3], sum_square[3];
+	static int64_t sum_total[3], sum_square_total[3];
+
+	static double mean[3], std_dev[3];
+	static int16_t max[3], min[3];
+
+	static time_t new_cycle = NULL;
+
+	if (!new_cycle)
+		new_cycle = time(NULL);
+	if(x > max[0])
+		max[0] = x;
+	else if(x < min[0])
+		min[0] = x;
+	if(y > max[1])
+		max[1] = y;
+	else if(y < min[1])
+		min[1] = y;
+	if(z > max[2])
+		max[2] = z;
+	else if(z < min[2])
+		min[2] = z;
+	sum[0] += x;
+	sum[1] += y;
+	sum[2] += z;
+	sum_square[0] += x*x;
+	sum_square[1] += y*y;
+	sum_square[2] += z*z;
+
+	if (reset)
+	{
+		//Calcul mean and dev, 
+		//adds temp_sums to total_sums and reset them
+		for(i = 0; i < 3; i++)
+		{
+			mean[i] = sum[i] / QUEUE_SIZE;
+			std_dev[i] = sqrt(sum_square[i]/QUEUE_SIZE -
+					mean[i]);
+			sum_total[i] += sum[i];
+			sum_square_total[i] += sum_square[i];
+			sum[i] = 0;
+			sum_square[i] = 0;
+			//send_to_sgf()
+		}
+		if(change_scale(std_dev[0], std_dev[1], std_dev[2]))
+			setup_all();
+
+		//Computes total mean and dev on the period
+		//Send these values to sigfox
+		if(difftime(time(NULL), new_cycle) > SGF_SEND_PERIOD)
+		{
+			for(i = 0; i < 3; i++)
+			{
+				mean[i] = sum_total[i] / QUEUE_SIZE;
+				std_dev[i] =sqrt(sum_square_total[i]/QUEUE_SIZE
+					      -mean[i]);
+				sum_total[i] = 0;
+				sum_square_total[i] = 0;
+				//send_to_sgf()
+			}
+			//send to sigfox
+		}
+
+
+	}
+}
 
 void *print_to_file(void * arg)
 {
@@ -499,7 +582,7 @@ void *print_to_file(void * arg)
 	FILE *fp;
 	//transfer from i2c thread to print thread is done through a message
 	//queue which contains up to QUEUE_SIZE records. 
-	// This thread reads data when message_queue[i].info var is set to 1.
+	// This thread reads data when message_queue[i].read_allowed var is set to 1.
 	struct data_acq *message_queue = (struct data_acq*) arg;
 	uint8_t pos = 0;
 
@@ -523,30 +606,23 @@ void *print_to_file(void * arg)
 		//Try to print at the same rate data is send by i2c
 		nanosleep(&tt, NULL);
 
-		while(message_queue[pos].info == 1)
+		while(message_queue[pos].read_allowed == 1)
 		{	
 			fprintf(fp, "%li,", &message_queue[pos].acq_time);
 			if(MAG_ACQ)
-				fprintf(fp, "%i,%i,%i,",
+				fprintf(fp, "%g,%g,%g,",
 						message_queue[pos].x_mag,
 						message_queue[pos].y_mag,
 						message_queue[pos].z_mag);
-			fprintf(fp, "%i,%i,%i,%i,%i,%i\n", 
+			fprintf(fp, "%g,%g,%g,%g,%g,%g\n", 
 					message_queue[pos].x_acc,
 					message_queue[pos].y_acc,
 					message_queue[pos].z_acc,
 					message_queue[pos].x_gyr,
 					message_queue[pos].y_gyr,
 					message_queue[pos].z_gyr);
-			message_queue[pos].info = 0;
+			message_queue[pos].read_allowed = 0;
 			//Garder pos entre 0 et QUEUE_SIZE
-			pos = pos++ == QUEUE_SIZE ? 0 : pos;
-		}
-
-		if(message_queue[pos].info > 1)
-		{
-			fprintf(fp, "%f\n", message_queue[pos].info/1000.0);
-			message_queue[pos].info = 0;
 			pos = pos++ == QUEUE_SIZE ? 0 : pos;
 		}
 

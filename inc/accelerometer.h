@@ -10,6 +10,7 @@
 #include "headers.h"
 #include "cfg.h" 
 #include "util.h"
+#include <math.h>
 
 // LSM9DS0 Gyro Registers 
 #define WHO_AM_I_G			0x0F
@@ -100,7 +101,8 @@
 #define SCALE_ACC_4G  (scale_config) {(0.122F), 0b00001000};
 #define SCALE_ACC_6G  (scale_config) {(0.183F), 0b00010000};
 #define SCALE_ACC_8G  (scale_config) {(0.244F), 0b00011000};
-#define SCALE_ACC_16G (scale_config) {(0.732F), 0b00100000} ;
+#define SCALE_ACC_16G (scale_config) {(0.488F), 0b00100000}; // is 0.732F in doc
+							     // why
 
 /// Magnetic Field Strength: gauss range
 #define SCALE_MAG_2GAUSS  (scale_config) {(0.08F), 0b00000000};
@@ -128,7 +130,7 @@
 #define QUEUE_SIZE 		200
 
 struct acq_cleanup_args{
-	int16_t** buffer;
+	float** buffer;
 	pthread_t *print_thread;
 	_Atomic uint8_t *alive;
 };
@@ -150,7 +152,7 @@ struct data_acq{
 	int16_t x_mag;
 	int16_t y_mag;
 	int16_t z_mag;
-	uint16_t info;
+	uint16_t read_allowed;
 };
 
 
@@ -186,7 +188,7 @@ uint8_t set_scale(enum instrument inst, scale_config new_scale);
  * Params : int16_t buffer[3][3] : [gyro/magn/acc] [x/y/z]
  * Return : error_code
 */
-uint8_t read_all(int16_t *buffer[3]);
+uint8_t read_all(float *buffer[3]);
 
 
 /* Function : get the gyrometer data
@@ -195,7 +197,7 @@ uint8_t read_all(int16_t *buffer[3]);
  * 	    -double scale : 0 or any SCALE_GYR_xxxxDPS : see p.13
  * Return : error_code
 */
-uint8_t read_gyrometer(int16_t *buffer);
+uint8_t read_gyrometer(float *buffer);
 
 
 /* Function : get the magnetometer data
@@ -204,7 +206,7 @@ uint8_t read_gyrometer(int16_t *buffer);
  * 	    -double scale : 0 or any SCALE_MAG_xGAUSS : see p.13
  * Return : error_code
 */
-uint8_t read_magnetometer(int16_t *buffer);
+uint8_t read_magnetometer(float *buffer);
 
 
 /* Function : get the accelerometer data
@@ -213,7 +215,7 @@ uint8_t read_magnetometer(int16_t *buffer);
  * 	    -double scale : 0 or any SCALE_ACC_xG : see p.13
  * Return : error_code
 */
-uint8_t read_accelerometer(int16_t *buffer);
+uint8_t read_accelerometer(float *buffer);
 
 
 /* Function : Configure the LSM9DS0 to start acquisition 

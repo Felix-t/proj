@@ -44,7 +44,7 @@ void *sigfox(void* arg)
 			fprintf(fp, " ; WLX2 : %u", alive[ACC_GYR + 1]);
 		fprintf(fp, "\n");
 		fflush(fp); //  fprint immediately
-		sleep(SGF_INTERVAL);
+		sleep(2);
 	}
 	fclose(fp);
 	pthread_exit((void *) 1);
@@ -58,19 +58,19 @@ void *sigfox(void* arg)
 static uint8_t start_AD_acq(pthread_t *battery_thread, _Atomic uint8_t *alive)
 {
 	if(pthread_create(battery_thread, NULL, battery, (void*)alive))	
-		return 1;
+		return 0;
 	// @TODO : traitements erreurs	
-	return 0;
+	return 1;
 
 }
 
 static uint8_t start_Sigfox(pthread_t *sigfox_thread, _Atomic uint8_t *alive)
 {
-	if(!pthread_create(sigfox_thread, NULL, sigfox, (void*)alive))
-		return 1;
+	if(pthread_create(sigfox_thread, NULL, sigfox, (void*)alive))
+		return 0;
 	// @TODO : traitements erreurs	
 
-	return 0;
+	return 1;
 }
 
 
@@ -84,9 +84,9 @@ static uint8_t start_Accelerometer_acq(pthread_t *accelerometer_thread, _Atomic 
 {
 
 	if(pthread_create(accelerometer_thread, NULL, acq_GYR_ACC, (void*)alive))
-		return 1;
+		return 0;
 	// @TODO : traitements erreurs	
-	return 0;
+	return 1;
 }
 
 
@@ -98,6 +98,7 @@ static uint8_t start_Accelerometer_acq(pthread_t *accelerometer_thread, _Atomic 
  */
 static uint8_t start_WLX2_acq(pthread_t *WLX2_thread, _Atomic uint8_t *alive)
 {
+	//@TODO : Lancer WLX2 via une activation d'un port gpio
 	//@TODO : start dhcp server with correct ip address
 	if(!start_dhcp_server())
 	{
@@ -106,9 +107,9 @@ static uint8_t start_WLX2_acq(pthread_t *WLX2_thread, _Atomic uint8_t *alive)
 	}
 
 	if(pthread_create(WLX2_thread, NULL, acq_WLX2, (void*)alive))
-		return 1;
+		return 0;
 	// @TODO : traitements erreurs	
-	return 0;
+	return 1;
 }
 
 /* Function : pour tester le multithreading
@@ -117,9 +118,8 @@ static uint8_t start_WLX2_acq(pthread_t *WLX2_thread, _Atomic uint8_t *alive)
  */
 static void *test()
 {
-
 	printf("Thread test created id : %li\n", syscall(__NR_gettid));
-	sleep(5);
+	sleep(20);
 	end_program = 1;
 	pthread_exit((void *) 1);
 }
@@ -138,8 +138,8 @@ int  main()
 		return 0;
 
 	//Start battery management
-	if(!start_AD_acq(&threads[i], &alive[i]) || !++i)
-		//if(pthread_create(&threads[i++], NULL, test, NULL))
+	//if(!start_AD_acq(&threads[i], &alive[i]) || !++i)
+	if(pthread_create(&threads[i++], NULL, test, NULL))
 	{
 		printf("AD thread creation failed\n");
 		return 0;
@@ -156,7 +156,7 @@ int  main()
 		printf("WLX2 thread creation failed\n");
 		return 0;
 	}
-	if(SGF && !start_Sigfox(&threads[i], alive))
+	if(SGF && !start_Sigfox(&threads[i++], alive))
 	{
 		printf("Sigfox thread creation failed\n");
 		return 0;
@@ -169,8 +169,8 @@ int  main()
 
 	free(threads);
 	printf("Acquisition ended with code %d\n", 1);	
-	bcm2835_close();
 	move_logs();
 	archive_data();
+	bcm2835_close();
 	return 1;
 } 

@@ -86,7 +86,6 @@ int Init_param_connexion(struct parametres_connexion *param_connection)
 	if (ID_socket_acquisition_data==-1){ok=0;goto fin_Init_param_connexion;}else{param_connection->ID_socket_acquisition_data=ID_socket_acquisition_data;}
 
 
-
 	if(ok)
 	{
 		memset(&param_connection->Server_Address,0,sizeof(struct sockaddr_in));
@@ -123,6 +122,8 @@ int Init_param_connexion(struct parametres_connexion *param_connection)
 
 
 	}
+
+
 
 fin_Init_param_connexion:;
 
@@ -732,7 +733,7 @@ while (i_answer_received<nb_answer_await)
 
 
 fin_thread_Receive_answer : ;
-
+free(ok_answer);
 pthread_exit(NULL);
 
 }

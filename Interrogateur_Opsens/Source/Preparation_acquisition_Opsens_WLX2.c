@@ -14,7 +14,6 @@ int Preparation_acquisition_WLX2(struct param_pgm *pparam_pgm, struct parametres
 	{
 		ok=Verif_free_space(pparam_pgm,1);
 	}
-	printf("End Preparation_acquisition_WLX2 : %i\n", ok);
 	return ok;
 }
 
@@ -104,56 +103,28 @@ void* thread_Acquisition_data (void* arg)
 
 	char answer_2[2][_RECEIVE_BUFF_SIZE]={'\0','\0'};
 
-	Send_command_and_receive_answer_2(p_data->pparam_connection,
-		       	"MEASure:RUN?", 2 ,answer_2, 0);
-	if (answer_2[0][0]!='0')
-	{
-		Zero_str(answer_2[0]);Zero_str(answer_2[1]);
-		Send_command_and_receive_answer_2(p_data->pparam_connection,
-				"MEASure:STOP", 2 ,answer_2, 0);
-	}
-
-	// Code a modifier pour retourner qqc quand l'interrogateur n'est pas pret
-	/*while (Find_substr_in_str(answer_2[0],reponse_state)==1)
-	{
-		getchar(); 
-
-		if(Close_socket(p_data->pparam_connection->ID_socket_command) && 
-				!sleep(5) && 
-				Init_param_connexion(p_data->pparam_connection))
-		{
-			sleep(5);
-			Zero_str(answer_2[0]);
-			Send_command_and_receive_answer_2(
-					p_data->pparam_connection,
-					"MEASure:RUN?", 2 ,answer_2, 0);
-		}else{
-			goto fin_thread_Acquisition_data;
-		}
-	}*/
-
 	//setup shared memory
 	p_data->pshared->nb_meas_done=0;
 	p_data->pshared->offset_modif=0;
 	p_data->pshared->ok_record=0;
 
-	Open_file_Enregistrement_data(p_data);
+	if(p_data->pconfig_all->pconfig_meas->set_zero == 1)
+		Zero_sensor(p_data->pparam_connection,1,1);
 
 	// Setup the zero of both channel, save zero and offset to shared memory
-	Get_zero_sensor(p_data->pparam_connection, 1, 
-			&zero_channel1);
-	Get_zero_sensor(p_data->pparam_connection, 2, 
-			&zero_channel2);
-	Get_offset_sensor(p_data->pparam_connection, 1, 
-			&offset_channel1);
-	Get_offset_sensor(p_data->pparam_connection, 2, 
-			&offset_channel2);
+	Get_zero_sensor(p_data->pparam_connection, 1, &zero_channel1);
+	Get_zero_sensor(p_data->pparam_connection, 2, &zero_channel2);
+	Get_offset_sensor(p_data->pparam_connection, 1, &offset_channel1);
+	Get_offset_sensor(p_data->pparam_connection, 2, &offset_channel2);
 
 	p_data->pshared->ch_zero[0]=zero_channel1;
 	p_data->pshared->ch_zero[1]=zero_channel2;
 	p_data->pshared->ch_offset[0]=offset_channel1;
 	p_data->pshared->ch_offset[1]=offset_channel2; 
 
+	Open_file_Enregistrement_data(p_data);
+
+	sleep(1);
 	// Debut de 'c'
 	if(Run_Thread_Enregistrement_data(p_data))
 	{

@@ -56,8 +56,15 @@ struct stUDPSendMeasureHeader_t stHeader;
 float fMeasure[_MAX_FLOAT_MEASURES];
 };
 
+struct sendToSgf
+{
+	float mean;
+	float std_dev;
+	float min;
+	float max;
+}
 
-
+void stats(struct stUDPSendMeasureType_t *ch1, struct stUDPSendMeasureType_t *ch2, int nb_measures);
 
 int Open_file_Enregistrement_data(struct param_pgm *param);
 

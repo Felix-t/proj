@@ -20,12 +20,11 @@ int Configuration_WLX2(struct parametres_connexion *param_connection, struct con
 		ok=Configuration_WLX2_channel(param_connection, pconfig_all);
 	}
 
-//	if (ok)
-//	{
-//		ok=Configuration_WLX2_date_time(param_connection);;
-//	}
+	//	if (ok)
+	//	{
+	//		ok=Configuration_WLX2_date_time(param_connection);;
+	//	}
 
-	printf("End Configuration_WLX2 : %i", ok);
 
 	return ok;
 }
@@ -288,49 +287,49 @@ int Configuration_WLX2_channel(struct parametres_connexion *param_connection, st
 
 	sleep(1);
 
-	printf("\t%s\n","->Suppression de la configuration \"capteur\" précédente : ");
-	if(Delete_all_sensor(param_connection)==0)
-	{
-		ok=0;
-		printf("\t%s\n", "...Echec");
-		goto fin_Configuration_WLX2_channel;
-	}
-
-	sleep(1);
-
-	printf("\t%s\n", "...ok");
-	printf("\t%s\n","->Ajout des nouveaux capteurs : ");
-	if(Add_sensors(param_connection, pconfig_all)==0)
-	{
-		ok=0;
-		printf("\t%s\n", "...Echec");
-		goto fin_Configuration_WLX2_channel;
-	}
-
-	sleep(1);
-
-	printf("\t%s\n", "...ok");
-	printf("\t%s\n","->Association des capteurs aux cannaux de mesure: ");
-	if(Associate_sensors_to_channel(param_connection, pconfig_all)==0)
-	{
-		ok=0;
-		printf("\t%s\n", "...Echec");
-		goto fin_Configuration_WLX2_channel;
-	}
-
-	sleep(1);
-
-	printf("\t%s\n", "...ok");
-	printf("\t%s\n","->Activation des cannaux de mesure: ");
-	if(Activation_channels(param_connection, pconfig_all)==0)
-	{
-		ok=0;
-		printf("\t%s\n", "...Echec");
-		goto fin_Configuration_WLX2_channel;
-	}
-
-	sleep(1);
-
+	//printf("\t%s\n","->Suppression de la configuration \"capteur\" précédente : ");
+	//	if(Delete_all_sensor(param_connection)==0)
+	//	{
+	//		ok=0;
+	//		printf("\t%s\n", "...Echec");
+	//		goto fin_Configuration_WLX2_channel;
+	//	}
+	//
+	//	sleep(1);
+	//
+	//	printf("\t%s\n", "...ok");
+	//	printf("\t%s\n","->Ajout des nouveaux capteurs : ");
+	//	if(Add_sensors(param_connection, pconfig_all)==0)
+	//	{
+	//		ok=0;
+	//		printf("\t%s\n", "...Echec");
+	//		goto fin_Configuration_WLX2_channel;
+	//	}
+	//
+	//	sleep(1);
+	//
+	//	printf("\t%s\n", "...ok");
+	//	printf("\t%s\n","->Association des capteurs aux cannaux de mesure: ");
+	//	if(Associate_sensors_to_channel(param_connection, pconfig_all)==0)
+	//	{
+	//		ok=0;
+	//		printf("\t%s\n", "...Echec");
+	//		goto fin_Configuration_WLX2_channel;
+	//	}
+	//
+	//	sleep(1);
+	//
+	//	printf("\t%s\n", "...ok");
+	//	printf("\t%s\n","->Activation des cannaux de mesure: ");
+	//	if(Activation_channels(param_connection, pconfig_all)==0)
+	//	{
+	//		ok=0;
+	//		printf("\t%s\n", "...Echec");
+	//		goto fin_Configuration_WLX2_channel;
+	//	}
+	//
+	//	sleep(1);
+	//
 	printf("\t%s\n", "...ok");
 
 
@@ -1022,14 +1021,11 @@ int Configuration_WLX2_date_time(struct parametres_connexion *param_connection)
 					//ok_date_time_modif=1;
 					break;
 			}
-			//}
-	}
+		}
 
 
 	}
-
-
-
+	free(curent_time_RPI);
 	return ok;
 }
 
@@ -1270,9 +1266,10 @@ int Change_date_time_RPI(char *current_time)
 	year=tm_current_time->tm_year+1900;
 	hour=tm_current_time->tm_hour;
 	minute=tm_current_time->tm_min;
-	second=tm_current_time->tm_sec,
+	second=tm_current_time->tm_sec;
 
-		sprintf(date,"%04d-%02d-%02d",year,month,day);
+	free(tm_current_time);
+	sprintf(date,"%04d-%02d-%02d",year,month,day);
 	sprintf(time,"%02d:%02d:%02d",hour,minute,second);
 
 

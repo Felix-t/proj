@@ -27,12 +27,15 @@
 #define ACC_GYR 0
 #define WLX2 1
 
+#define TEMPUSB "tempUSB/" //@ TODO: for debug purposes
+
 extern _Atomic uint8_t end_program;//To be modified only by main program to shutdown other threads
 
 //Forward declaration of acq_wlx
 extern void * acq_WLX2(void *);
 
 //TODO :  fichier sigfox
-#define SGF_INTERVAL 10  // 140 messages/jour : 3600*24/140
-
+#define SGF_INTERVAL 600 // 140 messages/jour : 3600*24/140
+#define NB_MESSAGES 6
+#define SGF_SEND_PERIOD SGF_INTERVAL*NB_MESSAGES
 #endif

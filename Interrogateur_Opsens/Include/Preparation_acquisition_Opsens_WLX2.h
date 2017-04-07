@@ -21,28 +21,28 @@ extern uint8_t end_program;
 
 struct shared 
 {
-int ok_record;
-int offset_modif;
-int nb_meas_done;
-float size_save_file;
-int nb_save_file;
-float *ch_offset;
-float *ch_zero;
-float *ch_value;
-float size_max_free; 
-char *chemin;
-char cmd_acq;
-pthread_mutex_t *mutex;
-pthread_t thread_enregistrement;
-FILE *fp;
+	int ok_record;
+	int offset_modif;
+	int nb_meas_done;
+	float size_save_file;
+	int nb_save_file;
+	float *ch_offset;
+	float *ch_zero;
+	float *ch_value;
+	float size_max_free; 
+	char *chemin;
+	char cmd_acq;
+	pthread_mutex_t *mutex;
+	pthread_t thread_enregistrement;
+	FILE *fp;
 };
 
 
 struct param_pgm
 {
-struct parametres_connexion *pparam_connection;
-struct config_all *pconfig_all;
-struct shared *pshared;
+	struct parametres_connexion *pparam_connection;
+	struct config_all *pconfig_all;
+	struct shared *pshared;
 };
 
 

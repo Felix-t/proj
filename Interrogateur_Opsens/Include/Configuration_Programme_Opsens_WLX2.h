@@ -45,10 +45,9 @@ struct config_meas
 	int SAMPLingrate;
 	int MEASureRATE;
 	int Freq_echantillonnage;
+	int set_zero;
 };
 
-//typedef struct config_meas sconfig_meas;
-//typedef struct config_save_file sconfig_save_file;
 
 struct config_all
 {

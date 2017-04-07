@@ -32,5 +32,12 @@
 
 void * acq_WLX2(void * args);
 
+typedef struct cleanup_args{
+	void ** mem_to_free[20];
+	uint8_t nb_of_malloc;
+	uint8_t *alive;
+	pthread_mutex_t *mutex;
+} cleanup_struct;
+
 #endif
 

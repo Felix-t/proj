@@ -5,6 +5,7 @@ conftest
 *.txt
 AD-DA/
 DAC8532/
+Data/
 *.lrz
 test
 tags

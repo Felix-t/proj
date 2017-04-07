@@ -62,7 +62,7 @@ int main_()
 	/*----------------------------------------------------------------  */
 	printf("%s\n","o Chargement du fichier de configuration : ...");
 
-	if (Load_config_file(&pconfig_all)==0)
+	if (Load_config_file(&pconfig_all, &param_connection.module_idn)==0)
 	{
 		printf("%s\n","... Echec du chargement du fichier de configuration");
 		goto fin_main;
@@ -141,6 +141,20 @@ fin_main:;
 	 //printf("%s\n","Bye Bye");
 }
 #endif
+
+
+static void WLX2_cleanup(void * cleanup_args)
+{
+	uint8_t i;
+	cleanup_struct *args = cleanup_args;
+	for (i=0;i<args->nb_of_malloc;i++)
+		free(*args->mem_to_free[i]);
+	*args->alive = 0;
+
+	pthread_mutex_destroy(args->mutex);
+}
+
+
 void * acq_WLX2(void * args)
 {
 	uint8_t *alive = args;
@@ -167,13 +181,12 @@ void * acq_WLX2(void * args)
 	pthread_mutex_t mutex=PTHREAD_MUTEX_INITIALIZER;
 	struct param_pgm pparam_pgm;
 
-
 	//Kill_old_process_Pgm_Opsens("Programme_Acquisition_Opsens_WLX2");
 	Init_struct_config_save_file(&pconfig_save_file, nom_projet, nomfic, 
-					rep_usb);
+			rep_usb);
 
 	Init_struct_config_meas(&pconfig_meas, select_ch, GFx_jauge_ch, 
-					numero_jauge_ch, type_jauge_ch);
+			numero_jauge_ch, type_jauge_ch);
 
 	Init_struct_config_all(&pconfig_all,&pconfig_save_file,&pconfig_meas);
 
@@ -182,25 +195,63 @@ void * acq_WLX2(void * args)
 	ch_offset=malloc(NB_CH*sizeof(float));
 	ch_value=malloc(NB_CH*sizeof(float));
 
+	// Every dynamic mem allocation needs to be freed by the cleanup_handler
+	// Add them to this struct
+	cleanup_struct cleanup_args = {
+		.mem_to_free[0] = (void *) &ch_zero,
+		.mem_to_free[1] = (void *) &ch_offset,
+		.mem_to_free[2] = (void *) &ch_value,
+		.mem_to_free[3] = (void *) &param_connection.module_idn,
+		.mem_to_free[4] = (void *) &pconfig_meas.select_ch,
+		.mem_to_free[5] = (void *) &pconfig_meas.GFx_jauge_ch,
+		.mem_to_free[6] = (void *) &pconfig_meas.numero_jauge_ch[0],
+		.mem_to_free[7] = (void *) &pconfig_meas.type_jauge_ch[0],
+		//If only one channel, 2following = 2 preceding 
+		// because [1] is not assigned if NB_CH = 1
+		.mem_to_free[8] = 
+			(void *) &pconfig_meas.type_jauge_ch[NB_CH - 1],
+		.mem_to_free[9] = 
+			(void *) &pconfig_meas.numero_jauge_ch[NB_CH - 1],
+		.nb_of_malloc = 5 + 2*NB_CH, //___[i] depends on nb_ch
+		.alive = alive,
+		.mutex = &mutex
+	};
+	pthread_cleanup_push(WLX2_cleanup, (void*) &cleanup_args);
+
 	// Run each function one after another
 	// Exit if one returns 0
-	if (!Load_config_file(&pconfig_all, &param_connection.module_idn)
-			|| !Make_and_test_connexion(&param_connection,0)
-			|| !Init_struct_shared(&pshared,chemin, ch_zero, 
-				ch_offset, ch_value, &mutex)
-			|| !Preparation_acquisition_WLX2(&pparam_pgm, 
-			      &param_connection, &pconfig_all, &pshared)
-			|| !Configuration_WLX2(&param_connection, &pconfig_all)
-			//|| !Lancement_thread_acquistion(&pparam_pgm)
-			)
-//	{
-//		pthread_exit(0);
-//	}
-	sleep(10);
-	pthread_mutex_destroy(&mutex);
-	pthread_exit(NULL);
+	if (!Load_config_file(&pconfig_all, &param_connection.module_idn))
+		printf("%s\n","... Echec du chargement du fichier de \
+			       configuration\n");
+	else if(!Make_and_test_connexion(&param_connection,0))
+		printf("%s\n","... Echec de la connexion avec WLX2\n");
 
-	pthread_exit((void *) 1);
+	else if(!Init_struct_shared(&pshared,chemin, ch_zero, 
+				ch_offset, ch_value, &mutex))
+		printf("%s\n","... Echec de la préparation\n");
 
+	else if(!Configuration_WLX2(&param_connection, &pconfig_all))
+		printf("%s\n","... Echec de la configuration\n");
 
+	else if(!Preparation_acquisition_WLX2(&pparam_pgm, 
+				&param_connection, &pconfig_all, &pshared))
+		printf("%s\n","... Echec de la préparation\n");
+
+	else if(!Lancement_thread_acquistion(&pparam_pgm))
+		printf("%s\n","... Echec de l'acquisition des données\n");
+
+	else
+	{
+		sleep(1);
+		pthread_exit((void *) 1);
+	}
+
+	printf("Error during WLX2 execution");
+	pthread_cleanup_pop(1);
+	pthread_exit(0);
 }
+
+
+
+
+
