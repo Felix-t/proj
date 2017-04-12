@@ -45,7 +45,7 @@ struct config_meas
 	int SAMPLingrate;
 	int MEASureRATE;
 	int Freq_echantillonnage;
-	int set_zero;
+	float zeros[NB_CH];
 };
 
 

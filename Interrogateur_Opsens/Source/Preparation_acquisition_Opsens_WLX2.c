@@ -77,10 +77,8 @@ int Lancement_thread_acquistion(struct param_pgm *param)
 				thread_Acquisition_data, param) 
 		&& !pthread_join(xthread_Acquisition_data,NULL)) 
 		return 1;
-	return -1;
+	return 0;
 }
-
-
 
 
 
@@ -108,7 +106,7 @@ void* thread_Acquisition_data (void* arg)
 	p_data->pshared->offset_modif=0;
 	p_data->pshared->ok_record=0;
 
-	if(p_data->pconfig_all->pconfig_meas->set_zero == 1)
+	if(p_data->pconfig_all->pconfig_meas->zeros[0] == 0)
 		Zero_sensor(p_data->pparam_connection,1,1);
 
 	// Setup the zero of both channel, save zero and offset to shared memory
@@ -117,10 +115,15 @@ void* thread_Acquisition_data (void* arg)
 	Get_offset_sensor(p_data->pparam_connection, 1, &offset_channel1);
 	Get_offset_sensor(p_data->pparam_connection, 2, &offset_channel2);
 
+	// Write new zeros values to the config file
+	if(p_data->pconfig_all->pconfig_meas->zeros[0] == 0)
+		save_zeros_offset(zero_channel1, zero_channel2);
 	p_data->pshared->ch_zero[0]=zero_channel1;
 	p_data->pshared->ch_zero[1]=zero_channel2;
 	p_data->pshared->ch_offset[0]=offset_channel1;
 	p_data->pshared->ch_offset[1]=offset_channel2; 
+
+	printf("Zero 1 : %f\tZero 2 : %f\n", zero_channel1, zero_channel2);
 
 	Open_file_Enregistrement_data(p_data);
 

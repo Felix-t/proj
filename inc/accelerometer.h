@@ -10,6 +10,7 @@
 #include "headers.h"
 #include "cfg.h" 
 #include "util.h"
+#include "sigfox.h"
 #include <math.h>
 
 // LSM9DS0 Gyro Registers 
@@ -129,11 +130,8 @@
 
 #define QUEUE_SIZE 		200
 
-struct acq_cleanup_args{
-	float** buffer;
-	pthread_t *print_thread;
-	_Atomic uint8_t *alive;
-};
+enum {X, Y, Z};
+enum instrument {ACC,GYR,MAG};
 
 typedef struct scale_cfg
 {
@@ -143,20 +141,16 @@ typedef struct scale_cfg
 
 struct data_acq{
 	time_t acq_time;
-	int16_t x_acc;
-	int16_t y_acc;
-	int16_t z_acc;
-	int16_t x_gyr;
-	int16_t y_gyr;
-	int16_t z_gyr;
-	int16_t x_mag;
-	int16_t y_mag;
-	int16_t z_mag;
+	float **data;
 	uint16_t read_allowed;
 };
 
+struct acq_cleanup_args{
+	struct data_acq *buffer;
+	pthread_t *print_thread;
+	_Atomic uint8_t *alive;
+};
 
-enum instrument {ACC,GYR,MAG};
 
 /* Function : This thread saves the data send by the LSM9DO in the file 
  * whose path is specified in config. When end_program is set, finishes 

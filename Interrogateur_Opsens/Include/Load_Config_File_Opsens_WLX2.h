@@ -13,10 +13,10 @@
 #define NB_MEASURE_MAX_BY_PAQUET 250
 
 
-#define NOMFIC_CONFIG_FILE "Interrogateur_Opsens/Config/Acquisition_Opsens_WLX2_parameters"
+#define NOMFIC_CONFIG_FILE "Interrogateur_Opsens/conftest"
 
 int Load_config_file(struct config_all *pconfig, char **module_idn);
 
-int Find_values_Samplingrate_measurerate(int Freq_echantillonnage, int *S, int *M);
+uint8_t save_zeros_offset(float zeros_1, float zeros_2);
 
 #endif

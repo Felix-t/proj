@@ -62,7 +62,7 @@ struct sendToSgf
 	float std_dev;
 	float min;
 	float max;
-}
+};
 
 void stats(struct stUDPSendMeasureType_t *ch1, struct stUDPSendMeasureType_t *ch2, int nb_measures);
 

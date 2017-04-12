@@ -19,7 +19,9 @@ static scale_config *get_scale();
 static void acq_cleanup(void *arg);
 static void print_cleanup(void *arg);
 static uint8_t change_scale(int16_t x, int16_t y, int16_t z);
-static void stat(int16_t x, int16_t y, int16_t z, uint8_t reset);
+static void stat(float **data, uint8_t reset);
+static inline float calc_mean(int64_t sum, int nb);
+static inline float calc_std_dev(int64_t sum, int nb, float mean);
 
 
 /* Function : parse the data from the LSM9DS0 registers to get readable values
@@ -52,14 +54,7 @@ static uint8_t change_scale(int16_t x, int16_t y, int16_t z)
 {
 	float range;
 	scale_config new_scale;
-	float value = get_scale()[ACC].value;
 	uint8_t reg = get_scale()[ACC].reg_config;
-	//if (max == 0)
-		//max = value*UP_SCALE;
-	//if (min == 0)
-		//min = value*DOWN_SCALE;
-		//if(x > max || y > max || z > max)
-		//{
 	switch (reg)
 	{
 		case 0:
@@ -226,14 +221,18 @@ static scale_config *get_scale()
 
 static void acq_cleanup(void *arg)
 {	
+	int i;
 	printf("LSM9DS0 cleanup routine");
 	struct acq_cleanup_args *ptr = arg;
 
 	bcm2835_i2c_end();
 	pthread_join(*(ptr->print_thread), NULL);
-	free(ptr->buffer[0]);
-	free(ptr->buffer);
-	*(ptr->alive) = 0;	
+	for (i = 0; i < QUEUE_SIZE; i++)
+	{
+		free(ptr->buffer[i].data[0]);
+		free(ptr->buffer);
+	}
+		*(ptr->alive) = 0;	
 }
 
 
@@ -267,7 +266,7 @@ uint8_t read_all(float **buffer)
 		printf("Gyrometer read error\n");
 		return 0;
 	}
-	if (MAG_ACQ && !read_magnetometer(buffer[2]))
+	if (LSM9DS0_MAG_ENABLE && !read_magnetometer(buffer[2]))
 	{
 		printf("Magnetometer read error\n");
 		return 0;
@@ -337,7 +336,7 @@ uint8_t setup_all()
 		printf("Gyrometer initialization error\n");
 		return 0;
 	}
-	if (MAG_ACQ && !setup_magnetometer())
+	if (LSM9DS0_MAG_ENABLE && !setup_magnetometer())
 	{
 		printf("Magnetometer initialization error\n");
 		return 0;
@@ -420,36 +419,35 @@ void *acq_GYR_ACC(void * arg)
 	tt.tv_sec = 0;
 	tt.tv_nsec = (long) 1000000000.0/INPUT_DATA_RATE;
 
-	uint8_t i, pos = 0, nb_cycle = 0;
-	uint8_t nb_acq = MAG_ACQ ? 3 : 2; //3 if magnetometer is used
-	float **buffer; //contains the data from the LSMD9
-	int64_t sum_square[3], sum[3];
-	double mean[3], std_dev[3];
+	uint8_t i, j, pos = 0;
+	uint8_t nb_acq = LSM9DS0_MAG_ENABLE ? 3 : 2; //3 if magnetometer is used
 	struct data_acq message_queue[QUEUE_SIZE];
 
 	pthread_t print_thread;
 
-	// Allocate mem to buffer getting data from sensors :
-	if((buffer = malloc(nb_acq * sizeof(float *))) == NULL 
-			|| nb_acq == 0)
+	for(i = 0; i< QUEUE_SIZE; i++)
 	{
-		printf("malloc failed\n");
-		return 0;
+		// Allocate mem to buffer getting data from sensors :
+		if((message_queue[i].data = malloc(nb_acq * sizeof(float *))) == NULL 
+				|| nb_acq == 0)
+		{
+			printf("malloc failed\n");
+			return 0;
+		}
+		// (x, y, z) = 3 for (ACC, GYR, (MAG))=2or3 containing a float
+		if((message_queue[i].data[0] = malloc(3 * nb_acq * sizeof(float))) == NULL)
+		{
+			printf("malloc failed\n");
+			return 0;
+		}
+		for(j = 1; j < nb_acq; j++)
+			message_queue[i].data[i] = message_queue[i].data[0] + i * 3;
 	}
-	// (x, y, z) = 3 for (ACC, GYR, (MAG))=2or3 containing a float
-	if((buffer[0] = malloc(3 * nb_acq * sizeof(float))) == NULL)
-	{
-		printf("malloc failed\n");
-		return 0;
-	}
-	for(i = 1; i < nb_acq; i++)
-		buffer[i] = buffer[0] + i * 3;
-
 	// Setup the cleanup handlers
 	struct acq_cleanup_args args;
 	args.alive = arg;
 	*args.alive = 1;
-	args.buffer = buffer;
+	args.buffer = message_queue;
 	args.print_thread = &print_thread;
 	pthread_cleanup_push(acq_cleanup, &args);
 
@@ -466,30 +464,18 @@ void *acq_GYR_ACC(void * arg)
 
 	while(!end_program)
 	{
-		read_all(buffer);
+		read_all(message_queue[pos].data);
 		message_queue[pos].acq_time = time(NULL);
 		//ADD to queue
-		message_queue[pos].x_acc = buffer[0][0];
-		message_queue[pos].y_acc = buffer[0][1];
-		message_queue[pos].z_acc = buffer[0][2];
-		message_queue[pos].x_gyr = buffer[1][0];
-		message_queue[pos].y_gyr = buffer[1][1];
-		message_queue[pos].z_gyr = buffer[1][2];
-		if(MAG_ACQ)
-		{
-			message_queue[pos].x_mag = buffer[2][0];
-			message_queue[pos].y_mag = buffer[2][1];
-			message_queue[pos].z_mag = buffer[2][2];
-		}
 		message_queue[pos].read_allowed = 1;
 
 		if(pos++ == QUEUE_SIZE)
 		{
+			stat(message_queue[pos].data, 1);
 			pos = 0;
-			stat(buffer[0][0], buffer[0][1], buffer[0][2], 1);
 		}
 		else
-			stat(buffer[0][0], buffer[0][1], buffer[0][2], 0);
+			stat(message_queue[pos].data, 0);
 
 		nanosleep(&tt, NULL);
 	}
@@ -498,68 +484,78 @@ pthread_cleanup_pop(1);
 pthread_exit((void *) 1);
 }
 
-static void stat(int16_t x, int16_t y, int16_t z, uint8_t reset)
+static void stat(float **data, uint8_t reset)
 {
-	int32_t i;
-	static int64_t sum[3], sum_square[3];
-	static int64_t sum_total[3], sum_square_total[3];
+	int32_t i, j;
+	static int64_t sum[2+LSM9DS0_MAG_ENABLE][3], sum_square[2+LSM9DS0_MAG_ENABLE][3];
+	static int64_t sum_total[2+LSM9DS0_MAG_ENABLE][3], sum_square_total[2+LSM9DS0_MAG_ENABLE][3];
 
-	static double mean[3], std_dev[3];
-	static int16_t max[3], min[3];
-
+	static double mean[2+LSM9DS0_MAG_ENABLE][3], std_dev[2+LSM9DS0_MAG_ENABLE][3];
+	static int16_t max[2+LSM9DS0_MAG_ENABLE][3], min[2+LSM9DS0_MAG_ENABLE][3];
+	static uint32_t count = 0;
 	static time_t new_cycle = NULL;
 
 	if (!new_cycle)
 		new_cycle = time(NULL);
-	if(x > max[0])
-		max[0] = x;
-	else if(x < min[0])
-		min[0] = x;
-	if(y > max[1])
-		max[1] = y;
-	else if(y < min[1])
-		min[1] = y;
-	if(z > max[2])
-		max[2] = z;
-	else if(z < min[2])
-		min[2] = z;
-	sum[0] += x;
-	sum[1] += y;
-	sum[2] += z;
-	sum_square[0] += x*x;
-	sum_square[1] += y*y;
-	sum_square[2] += z*z;
+	for (i = 0; i < 2+LSM9DS0_MAG_ENABLE; i++)
+	{
+		for(j = 0; j < 3; j++)
+		{
+			if(data[i][j] > max[i][j])
+				max[i][j] = data[i][j];
+			else if(data[i][j] < min[i][j])
+				min[i][j] = data[i][j];
+			sum[i][j] += data[i][j];
+			sum_square[i][j] += data[i][j];
+		}
+	}
 
+	// Every QUEUE_SIZE measures, calculate the standard deviation for ACC
+	// to see if the scale needs to be changed
+	// When data needs to be sent through sigfox, computes the mean and 
+	// the standard deviation on a longer period for ACC and GYR (and MAG)
 	if (reset)
 	{
-		//Calcul mean and dev, 
-		//adds temp_sums to total_sums and reset them
+		count++;
 		for(i = 0; i < 3; i++)
 		{
-			mean[i] = sum[i] / QUEUE_SIZE;
-			std_dev[i] = sqrt(sum_square[i]/QUEUE_SIZE -
-					mean[i]);
-			sum_total[i] += sum[i];
-			sum_square_total[i] += sum_square[i];
-			sum[i] = 0;
-			sum_square[i] = 0;
-			//send_to_sgf()
+			mean[ACC][i] = calc_mean(sum[i][j],
+					QUEUE_SIZE);
+			std_dev[ACC][i] = calc_std_dev(
+					sum_square[i][j], 
+					QUEUE_SIZE, 
+					mean[i][j]);
+			//adds temp_sums to total_sums and reset them
+			for(j = 0; j < 2 + LSM9DS0_MAG_ENABLE; j++)
+			{
+				sum_total[j][i] += sum[j][i];
+				sum_square_total[j][i] += sum_square[j][i];
+				sum[j][i] = 0;
+				sum_square[j][i] = 0;
+			}
 		}
-		if(change_scale(std_dev[0], std_dev[1], std_dev[2]))
+		if(change_scale(std_dev[ACC][X], std_dev[ACC][Y], std_dev[ACC][Z]))
 			setup_all();
 
 		//Computes total mean and dev on the period
 		//Send these values to sigfox
 		if(difftime(time(NULL), new_cycle) > SGF_SEND_PERIOD)
 		{
-			for(i = 0; i < 3; i++)
+			for(i = 0; i < 2 + LSM9DS0_MAG_ENABLE; i++)
 			{
-				mean[i] = sum_total[i] / QUEUE_SIZE;
-				std_dev[i] =sqrt(sum_square_total[i]/QUEUE_SIZE
-					      -mean[i]);
-				sum_total[i] = 0;
-				sum_square_total[i] = 0;
-				//send_to_sgf()
+				for(j = 0; j < 3; j++)
+				{
+					mean[i][j] = calc_mean(
+							sum_total[i][j],
+							QUEUE_SIZE*count);
+					std_dev[i][j] = calc_std_dev(
+							sum_square_total[i][j], 
+							QUEUE_SIZE*count, 
+							mean[i][j]);
+					sum_total[i][j] = 0;
+					sum_square_total[i][j] = 0;
+					count = 0;
+				}
 			}
 			//send to sigfox
 		}
@@ -567,6 +563,19 @@ static void stat(int16_t x, int16_t y, int16_t z, uint8_t reset)
 
 	}
 }
+
+
+static inline float calc_mean(int64_t sum, int nb)
+{
+	return sum/nb;
+}
+
+
+static inline float calc_std_dev(int64_t sum, int nb, float mean)
+{
+	return sqrt(sum/nb-mean);
+}
+
 
 void *print_to_file(void * arg)
 {
@@ -597,9 +606,10 @@ void *print_to_file(void * arg)
 	}
 
 	//Add header 
-	if(MAG_ACQ)
+	fprintf(fp, "TIME, ACC_X, ACC_Y, ACC_Z, GYR_X, GYR_Y, GYR_Z");
+	if(LSM9DS0_MAG_ENABLE)
 		fprintf(fp, "MAG_X, MAG_Y, MAG_Z, ");
-	fprintf(fp, "ACC_X, ACC_Y, ACC_Z, GYR_X, GYR_Y, GYR_Z\n");
+	fprintf(fp, "\n");
 
 	while(!end_program)
 	{
@@ -609,18 +619,19 @@ void *print_to_file(void * arg)
 		while(message_queue[pos].read_allowed == 1)
 		{	
 			fprintf(fp, "%li,", &message_queue[pos].acq_time);
-			if(MAG_ACQ)
+			fprintf(fp, "%g,%g,%g,%g,%g,%g", 
+					message_queue[pos].data[ACC][X],
+					message_queue[pos].data[ACC][Y],
+					message_queue[pos].data[ACC][Z],
+					message_queue[pos].data[GYR][X],
+					message_queue[pos].data[GYR][Y],
+					message_queue[pos].data[GYR][Z]);
+			if(LSM9DS0_MAG_ENABLE)
 				fprintf(fp, "%g,%g,%g,",
-						message_queue[pos].x_mag,
-						message_queue[pos].y_mag,
-						message_queue[pos].z_mag);
-			fprintf(fp, "%g,%g,%g,%g,%g,%g\n", 
-					message_queue[pos].x_acc,
-					message_queue[pos].y_acc,
-					message_queue[pos].z_acc,
-					message_queue[pos].x_gyr,
-					message_queue[pos].y_gyr,
-					message_queue[pos].z_gyr);
+						message_queue[pos].data[MAG][X],
+						message_queue[pos].data[MAG][Y],
+						message_queue[pos].data[MAG][Z]);
+			fprintf(fp, "\n");
 			message_queue[pos].read_allowed = 0;
 			//Garder pos entre 0 et QUEUE_SIZE
 			pos = pos++ == QUEUE_SIZE ? 0 : pos;

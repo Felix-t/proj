@@ -237,7 +237,6 @@ static uint8_t exec_compression(char * path)
 {
 	pid_t pid = fork();
 	if (pid == 0) { /* child */
-		printf("gne");
 		execl("/usr/bin/lrztar", "/usr/bin/lrztar", "-l", "-L", "5",
 				"-o", path, "Data/", (char *)0); //@TODO : remplacer Data/ par const ou config
 		exit(0);

@@ -22,20 +22,37 @@
 #include <libconfig.h>
 #include <pthread.h>
 
-#define SGF 1  //Sigfox enabled
-#define MAG_ACQ 0
-#define ACC_GYR 0
-#define WLX2 1
+#define SGF_ENABLE 1  //Sigfox enabled
+#define LSM9DS0_MAG_ENABLE 0
+#define LSM9DS0_ENABLE 0
+#define WLX2_ENABLE 1
+
+#define MSG_QUEUE_SIZE 100 // size of the message queue buffer for sigfox
 
 #define TEMPUSB "tempUSB/" //@ TODO: for debug purposes
 
-extern _Atomic uint8_t end_program;//To be modified only by main program to shutdown other threads
+typedef enum {LSM9DS0, WLX2, AD_CONVERTER} identity;
+
+
+struct sgf_data{
+	uint8_t write_allowed;
+	identity id;
+	float min;
+	float max;
+	float mean;
+	float std_dev;
+	time_t time;
+	pthread_mutex_t mutex;
+};
+
+ //To be modified only by main program to shutdown other threads
+extern _Atomic uint8_t end_program;
+
+// @ TODO : message queue global var or pass through pointer
+struct sgf_data sgf_msg;
 
 //Forward declaration of acq_wlx
 extern void * acq_WLX2(void *);
 
-//TODO :  fichier sigfox
-#define SGF_INTERVAL 600 // 140 messages/jour : 3600*24/140
-#define NB_MESSAGES 6
-#define SGF_SEND_PERIOD SGF_INTERVAL*NB_MESSAGES
+
 #endif

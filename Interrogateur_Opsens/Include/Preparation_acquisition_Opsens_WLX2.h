@@ -17,6 +17,10 @@
 #include "Fonctions_Utiles.h"
 #endif
 
+#ifndef LOAD_CONFIG_FILE__H
+#include "Load_Config_File_Opsens_WLX2.h"
+#endif
+
 extern uint8_t end_program;
 
 struct shared 
