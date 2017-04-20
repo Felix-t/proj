@@ -1,36 +1,20 @@
 #ifndef CONFIGURATION_MOD__H
 #define CONFIGURATION_MOD__H
 
-#ifndef HEADERS__H
-#include "Headers.h"
-#endif
-
-#ifndef CONNEXION__H
-#include "Connexion_Opsens_WLX2.h"
-#endif
-
-#ifndef CONFIGURATION_PGM__H
+#include "headers.h"
 #include "Configuration_Programme_Opsens_WLX2.h"
-#endif
+#include "Connexion_Opsens_WLX2.h"
 
-
-#ifndef FUNCTIONS_UTILES__H
-#include "Fonctions_Utiles.h"
-#endif
 
 
 struct sensor_def
 {
-char sensor_type[2];
-int sensor_GF0;
-int sensor_GF1;
-int sensor_GF2;
-int sensor_GF3;
+	char sensor_type[2];
+	int sensor_GF0;
+	int sensor_GF1;
+	int sensor_GF2;
+	int sensor_GF3;
 };
-
-
-
-
 
 
 int Configuration_WLX2(struct parametres_connexion *param_connection, struct config_all *pconfig_all);
@@ -52,7 +36,6 @@ int Change_time_WLX2(struct parametres_connexion *param_connection, char *curren
 int Compare_date_time_RPI_WLX2(char *current_time_RPI, char *current_time_WLX2);
 
 int fgets_stdin(char *str_line,int size_str_line);
-
 
 int Configuration_WLX2_channel(struct parametres_connexion *param_connection, struct config_all *pconfig_all);
 

@@ -1,21 +1,7 @@
 #ifndef PREPARATION_ACQ__H
 #define PREPARATION_ACQ__H
 
-#ifndef HEADERS__H
-#include "Headers.h"
-#endif
-
-#ifndef CONFIGURATION_PGM__H
-#include "Configuration_Programme_Opsens_WLX2.h"
-#endif
-
-#ifndef CONNEXION__H
-#include "Connexion_Opsens_WLX2.h"
-#endif
-
-#ifndef FUNCTIONS_UTILES__H
-#include "Fonctions_Utiles.h"
-#endif
+#include "headers.h"
 
 
 struct shared 
@@ -30,10 +16,10 @@ struct shared
 	float *ch_value;
 	float size_max_free; 
 	char *chemin;
-	char cmd_acq;
 	pthread_mutex_t *mutex;
 	pthread_t thread_enregistrement;
 	FILE *fp;
+	char cmd_acq;
 };
 
 
@@ -45,14 +31,8 @@ struct param_pgm
 };
 
 
-
-#ifndef ACQUISITION__H
-#include "Acquisition_Opsens_WLX2.h"
-#endif
-
-
-
 void* thread_Acquisition_data (void* arg);
+
 void* thread_Wait_Command(void* arg);
 
 int Preparation_acquisition_WLX2(struct param_pgm *pparam_pgm, struct parametres_connexion *pparam_connection, struct config_all *pconfig_all, struct shared *pshared);

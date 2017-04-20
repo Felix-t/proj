@@ -1,7 +1,7 @@
 #ifndef FUNCTIONS_UTILES__H
 #define FUNCTIONS_UTILES__H
 
-#include "Headers.h"
+#include "headers.h"
 
 
 int Find_substr_in_str(char *str, char *substr);

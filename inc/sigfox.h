@@ -5,8 +5,11 @@
 #define MAX_NB_MSG 140 //daily max number of messages that can be sent with sgf
 
 //TODO :  fichier sigfox
-#define SGF_SEND_PERIOD 24*3600/MAX_NB_MSG // 140 messages/jour : 3600*24/140
-
+//REAL : #define SGF_SEND_PERIOD 24*3600/MAX_NB_MSG // 140 messages/jour : 3600*24/140
+//Test : 
+	//#define SGF_SEND_PERIOD 20
+	
+	
 // Message sigfox recap (see excel sheet for complete info) :
 // TIME :3| alive + id + msg_type :1| float min or mean :4| float max or dev :4
 

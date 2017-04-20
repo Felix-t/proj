@@ -30,18 +30,17 @@ static void WLX2_cleanup(void * cleanup_args)
 	for (i=0;i<args->nb_of_malloc;i++)
 		free(*args->mem_to_free[i]);
 	*args->alive = 0;
+	pthread_mutex_destroy(args->mutex);
 }
 
 
 
 #ifndef _MAIN_
-int main_()
+int main()
 {
-	int i,j,k;
-	int *select_ch;
+	int *select_ch = NULL;
 	int (*GFx_jauge_ch)[4]={0};
-	float *ch_zero,*ch_offset;
-	float *ch_value;
+	float *ch_zero,*ch_offset, *ch_value;
 
 	char nom_projet[_STR_LONG]={'\0'},chemin[_STR_LONG]={'\0'},nomfic[_STR_LONG]={'\0'},rep_usb[_STR_LONG]={'\0'};
 
@@ -206,7 +205,8 @@ void * acq_WLX2(void * args)
 	struct config_meas pconfig_meas;
 	struct config_all pconfig_all;
 	struct shared pshared;
-	pthread_mutex_t mutex=PTHREAD_MUTEX_INITIALIZER;
+	pthread_mutex_t mut=PTHREAD_MUTEX_INITIALIZER;
+	printf("At init, %i\n", &mut);
 	struct param_pgm pparam_pgm;
 
 	//Kill_old_process_Pgm_Opsens("Programme_Acquisition_Opsens_WLX2");
@@ -230,7 +230,7 @@ void * acq_WLX2(void * args)
 		.mem_to_free[7] = (void *) &pconfig_meas.type_jauge_ch[0],
 		.nb_of_malloc = 8, 
 		.alive = alive,
-		.mutex = &mutex
+		.mutex = &mut
 	};
 	if(NB_CH == 2)
 	{
@@ -252,7 +252,7 @@ void * acq_WLX2(void * args)
 		printf("%s\n","... Echec de la connexion avec WLX2\n");
 
 	else if(!Init_struct_shared(&pshared,chemin, ch_zero, 
-				ch_offset, ch_value, &mutex))
+				ch_offset, ch_value, &mut))
 		printf("%s\n","... Echec de la préparation\n");
 
 	else if(!Configuration_WLX2(&param_connection, &pconfig_all))
@@ -272,6 +272,7 @@ void * acq_WLX2(void * args)
 	}
 
 	printf("Error during WLX2 execution");
+	pthread_mutex_destroy(&mut);
 	pthread_cleanup_pop(1);
 	pthread_exit(0);
 }

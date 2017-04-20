@@ -94,7 +94,7 @@ static uint8_t start_WLX2_acq(pthread_t *WLX2_thread, _Atomic uint8_t *alive)
 static void *test()
 {
 	printf("Thread test created id : %li\n", syscall(__NR_gettid));
-	sleep(20);
+	sleep(3600*15+2000);
 	end_program = 1;
 	pthread_exit((void *) 1);
 }

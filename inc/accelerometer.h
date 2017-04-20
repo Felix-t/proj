@@ -168,6 +168,16 @@ void *print_to_file(void * arg);
 void *acq_GYR_ACC(void * arg);
 
 
+/* Function : Calculates and save the min, max, mean and standard deviation
+ * 	each time reset is set to 1, and change the accelerometer scale accordingly
+ * 	Also calculates the statistics on longer periods (SGF_SEND_PERIOD)
+ * 	then creates a thread to send the data (to the sgf thread).
+ * Params : data is x,y,z values of ACC,GYR,MAG. reset indicates when the 
+ * 	values needs to be calculated
+*/
+void stats(float **data, uint8_t reset);
+
+
 /* Function : Set the scale for the specified LSM9D0 instrument
  * 	The hardware needs to be reconfigured with setup() afterwards	
  * Params :  * 	uint8_t instrument : from enum instrument

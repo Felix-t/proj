@@ -1,6 +1,8 @@
 #ifndef HEADER_H
 #define HEADER_H
 
+#define __USE_XOPEN
+#define _GNU_SOURCE
 /*
  * startup.c:
  *	Program launched on startup 
@@ -31,18 +33,33 @@
 
 #define TEMPUSB "tempUSB/" //@ TODO: for debug purposes
 
-typedef enum {LSM9DS0, WLX2, AD_CONVERTER} identity;
+#define SGF_SEND_PERIOD 1800
+
+
+typedef enum {WLX2_CH1,
+	WLX2_CH2,
+	LSM9DS0_ACC_X,
+	LSM9DS0_ACC_Y,
+	LSM9DS0_ACC_Z,
+	LSM9DS0_GYR_X,
+	LSM9DS0_GYR_Y,
+	LSM9DS0_GYR_Z,
+	LSM9DS0_MAG_X,
+	LSM9DS0_MAG_Y,
+	LSM9DS0_MAG_Z,
+	AD_CONVERTER} identity;
+
 
 
 struct sgf_data{
-	uint8_t write_allowed;
-	identity id;
 	float min;
 	float max;
 	float mean;
 	float std_dev;
 	time_t time;
 	pthread_mutex_t mutex;
+	identity id;
+	uint8_t write_allowed;
 };
 
  //To be modified only by main program to shutdown other threads
@@ -53,6 +70,5 @@ struct sgf_data sgf_msg;
 
 //Forward declaration of acq_wlx
 extern void * acq_WLX2(void *);
-
 
 #endif

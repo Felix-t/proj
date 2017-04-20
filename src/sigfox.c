@@ -29,6 +29,7 @@ void * send_sigfox(void *args)
 		pthread_mutex_unlock(&sgf_msg.mutex);
 		sleep(2);
 	}
+	pthread_exit((void *) 1);
 }
 
 
@@ -79,7 +80,6 @@ void *sigfox(void* args)
 	{
 		for(i = 0; i < 12; i++)
 			messages[pos_in][i] = 0;
-		//@TODO : Proper time saving : ref isn't good
 
 		pthread_mutex_lock(&sgf_msg.mutex);
 		//if acq thread has finished writing :
@@ -87,11 +87,13 @@ void *sigfox(void* args)
 		{
 			if(difftime(sgf_msg.time, ref_time) > 3600*24)
 				ref_time += 3600*24;
-			t = (uint32_t) difftime(sgf_msg.time, ref_time) << 8;
+			t = (uint32_t) difftime(sgf_msg.time, ref_time) << 12;
 
+			//Build message min/max
 			build_message(messages[pos_in], t, sgf_msg.min, 
 					sgf_msg.max, alive, sgf_msg.id, 0);
-			//Save second messages (mean std dev) :
+			
+			//Build message mean/standard dev
 			pos_in++;
 			build_message(messages[pos_in], t, sgf_msg.mean, 
 					sgf_msg.std_dev, alive, sgf_msg.id, 1);
@@ -123,22 +125,27 @@ static void build_message(uint8_t msg[12], uint32_t t, float val1, float val2,
 	// Construct the 12 bytes message sent with sigfox
 	memcpy(&msg[0], &t, 4);  //TIME on 3 bytes
 	//@TODO : a cause de little endian :
+	
 	for(i=0;i<2;i++)
 	{
 		tmp = msg[i];
 		msg[i] = msg[3-i];
 		msg[3-i] = tmp;
 	}
+	
 
 	//alive, id, type of msg :
+	/*
 	msg[3] |= (alive[0] << 6);
 	if(LSM9DS0_ENABLE)
 		msg[3] |= (alive[1] << 5);
 	if(WLX2_ENABLE)
 		msg[3]|= (alive[2] << 4);
-	msg[3]|= (id << 1);
+	*/
+	msg[3] |= (id << 1);
 	msg[3] |= msg_type;
 
 	memcpy(&msg[4], &val1, 4);
 	memcpy(&msg[8], &val2, 4);
+	printf("val1 : %f, val2 : %f\n", val1, val2);
 }

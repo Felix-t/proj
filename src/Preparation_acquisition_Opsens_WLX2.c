@@ -1,4 +1,12 @@
 #include "Preparation_acquisition_Opsens_WLX2.h" 
+#include <dirent.h>
+#include <sys/stat.h>
+#include "Configuration_Programme_Opsens_WLX2.h"
+#include "Connexion_Opsens_WLX2.h"
+#include "Fonctions_Utiles.h"
+#include "Load_Config_File_Opsens_WLX2.h"
+#include "sigfox.h"
+#include "Acquisition_Opsens_WLX2.h"
 
 /********************************************************/
 /*Fonction: Configuration_WLX2                          */
@@ -6,15 +14,11 @@
 /********************************************************/
 int Preparation_acquisition_WLX2(struct param_pgm *pparam_pgm, struct parametres_connexion *pparam_connection, struct config_all *pconfig_all, struct shared *pshared)
 {
-	int ok=1;
 	Init_struct_param_pgm(pparam_pgm, pparam_connection, pconfig_all, pshared);
-	ok=Init_repertoire_pour_enregistrement_data(pparam_pgm);
-
-	if(ok)
-	{
-		ok=Verif_free_space(pparam_pgm,1);
-	}
-	return ok;
+	if(Init_repertoire_pour_enregistrement_data(pparam_pgm)
+			&& Verif_free_space(pparam_pgm, 1))
+		return 1;
+	return 0;
 }
 
 
@@ -27,9 +31,8 @@ int Preparation_acquisition_WLX2(struct param_pgm *pparam_pgm, struct parametres
 /*Fonction: Init_struct_shared                          */
 /*                                                      */
 /********************************************************/
-int Init_struct_shared(struct shared *pshared, char *chemin, float *ch_zero,float *ch_offset,float *ch_value, pthread_mutex_t *mutex)
+int Init_struct_shared(struct shared *pshared, char *chemin, float *ch_zero,float *ch_offset,float *ch_value, pthread_mutex_t *mut)
 {
-	int ok;
 	pshared->size_save_file=0;
 	pshared->nb_save_file=0;
 	pshared->ch_zero=ch_zero;
@@ -38,17 +41,10 @@ int Init_struct_shared(struct shared *pshared, char *chemin, float *ch_zero,floa
 	pshared->size_max_free=0; 
 	pshared->chemin=chemin;
 	pshared->cmd_acq='p';
-	pshared->mutex=mutex;
+	pshared->mutex=mut;
 	pshared->thread_enregistrement=0;
 
-
-
-	if(pthread_mutex_init (pshared->mutex, NULL)==0){ok=1;}else{ok=0;};
-
-
-
-
-	return ok;
+	return 1;
 }
 
 
@@ -92,14 +88,8 @@ int Lancement_thread_acquistion(struct param_pgm *param)
 void* thread_Acquisition_data (void* arg)
 {
 	struct param_pgm  *p_data=arg;
-	struct tm* tm_info;
-	time_t timer;
 
-	float zero_channel,offset_channel,zero_channel1,offset_channel1,zero_channel2,offset_channel2;
-	char cmd_receive,cmd_receive_before,buffer[26];
-	char reponse_state[20]="State:-201";
-
-	char answer_2[2][_RECEIVE_BUFF_SIZE]={'\0','\0'};
+	float zero_channel1,offset_channel1,zero_channel2,offset_channel2;
 
 	//setup shared memory
 	p_data->pshared->nb_meas_done=0;
@@ -118,13 +108,15 @@ void* thread_Acquisition_data (void* arg)
 	// Write new zeros values to the config file
 	if(p_data->pconfig_all->pconfig_meas->zeros[0] == 0)
 		save_zeros_offset(zero_channel1, zero_channel2);
-	p_data->pshared->ch_zero[0]=zero_channel1;
-	p_data->pshared->ch_zero[1]=zero_channel2;
-	p_data->pshared->ch_offset[0]=offset_channel1;
-	p_data->pshared->ch_offset[1]=offset_channel2; 
+	p_data->pshared->ch_zero[0] = zero_channel1;
+	p_data->pshared->ch_zero[1] = zero_channel2;
+	p_data->pshared->ch_offset[0] = offset_channel1;
+	p_data->pshared->ch_offset[1] = offset_channel2; 
 
 	printf("Zero 1 : %f\tZero 2 : %f\n", zero_channel1, zero_channel2);
 
+	pthread_mutex_lock(p_data->pshared->mutex);
+	pthread_mutex_unlock(p_data->pshared->mutex);
 	Open_file_Enregistrement_data(p_data);
 
 	sleep(1);
@@ -141,7 +133,7 @@ void* thread_Acquisition_data (void* arg)
 			p_data->pshared->ok_record=0;
 			p_data->pshared->cmd_acq='s';
 			pthread_mutex_unlock(p_data->pshared->mutex);
-			goto fin_thread_Acquisition_data;
+			pthread_exit(NULL);
 		}
 	}
 	else
@@ -158,8 +150,6 @@ void* thread_Acquisition_data (void* arg)
 	pthread_mutex_unlock(p_data->pshared->mutex);
 
 	Stop_Thread_Enregistrement_data(p_data);
-
-fin_thread_Acquisition_data:
 
 	pthread_exit(NULL);
 }
@@ -258,7 +248,6 @@ void* thread_Wait_Command (void* arg)
 /********************************************************/
 int Verif_free_space(struct param_pgm *param, int ok_print)
 {
-	int ok=1,nb_file_enregistrable=0;
 	float size_max_1_file=0.0,res_size_max_free=0.0;
 	char chemin[500]={'\0'};
 
@@ -268,30 +257,15 @@ int Verif_free_space(struct param_pgm *param, int ok_print)
 	strcat(chemin,param->pshared->chemin);
 	strcat(chemin,"\"");
 
-	/*
-	   if (param->pconfig_all->pconfig_save_file->usb)
-	   {
-	   strcat(chemin,"\"");
-	   strcat(chemin,param->pconfig_all->pconfig_save_file->rep_usb);
-	   strcat(chemin,"\"");
-	   }else{
-	   strcat(chemin,"/home/pi");
-	   */
-
 	res_size_max_free=Calcul_free_space(chemin, ok_print);
 
 	param->pshared->size_max_free=res_size_max_free;
 
 	if (res_size_max_free <= size_max_1_file){
-		ok=0;
-	}else{
-		if(ok_print)
-		{
-			nb_file_enregistrable=(int)(res_size_max_free/size_max_1_file);
-		}
+		return 0;
 	}
 
-	return ok;
+	return 1;
 }
 
 
@@ -323,12 +297,8 @@ void Envoi_SMS_alert()
 int Init_repertoire_pour_enregistrement_data(struct param_pgm *param)
 {
 	DIR *rep=NULL;
-	int ok=1,tmp_string_len,ok_usb;
-	int file_save_exist,nb_file_save;
 	char rep_data[1024]="",buffer[26];
-	char cwd[1024],tempchar[1024];
-	struct dirent* entry=NULL;
-	struct stat stabuf;
+	char cwd[1024];
 	struct tm* tm_info;
 	time_t timer;
 
@@ -336,32 +306,40 @@ int Init_repertoire_pour_enregistrement_data(struct param_pgm *param)
 	tm_info=localtime(&timer);
 	strftime(buffer, 26,"%d_%m_%Y",tm_info);
 
-	ok_usb=param->pconfig_all->pconfig_save_file->usb;
-	if (ok_usb)
+	if (param->pconfig_all->pconfig_save_file->usb)
 	{
 		strcpy(rep_data,param->pconfig_all->pconfig_save_file->rep_usb);strcat(rep_data,"/Data");
 	}else{
 		getcwd(cwd,sizeof(cwd));
-		strcpy(rep_data,cwd);strcat(rep_data,"/Data");
+		strcpy(rep_data,cwd);
+		strcat(rep_data,"/Data");
 	}
 
 	rep=opendir(rep_data);
 	if (rep == NULL) 
-	{
 		mkdir(rep_data,S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
-	}else{
-		if (closedir(rep)==-1) exit(-1);
+	else{
+		if (closedir(rep)==-1) 
+		{
+			printf("Failed to close %s\n", rep_data);
+			return 0;
+		}
 	}
 
 
-	strcat(rep_data,"/");strcat(rep_data,param->pconfig_all->pconfig_save_file->nom_projet);
+	strcat(rep_data,"/");
+	strcat(rep_data,param->pconfig_all->pconfig_save_file->nom_projet);
 
 	rep=opendir(rep_data);
 	if (rep == NULL) 
 	{
-		mkdir(rep_data,S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+		mkdir(rep_data, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
 	}else{
-		if (closedir(rep)==-1) {ok=0;};
+		if (closedir(rep)==-1) 
+		{
+			printf("Failed to close %s\n", rep_data);
+			return 0;
+		}
 	}
 
 
@@ -373,17 +351,18 @@ int Init_repertoire_pour_enregistrement_data(struct param_pgm *param)
 	{
 		mkdir(rep_data,S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
 	}else{
-		if (closedir(rep)==-1) {ok=0;};
+		if (closedir(rep)==-1) 
+		{
+			printf("Failed to close %s\n", rep_data);
+			return 0;
+		}
 	}
-
 
 	memcpy(param->pshared->chemin,rep_data,(strlen(rep_data)+1)*sizeof(char));
 
-	//nb_file_save=find_last_file_save(rep_data, nomfile_save);
 	Find_dernier_enregistrement(param);
 
-	//return nb_file_save;
-	return ok;
+	return 1;
 }
 
 
@@ -400,11 +379,11 @@ int Init_repertoire_pour_enregistrement_data(struct param_pgm *param)
 void Find_dernier_enregistrement(struct param_pgm *param)
 {
 	DIR *rep=NULL;
-	int i,j,file_save_exist,nb_file_save;
+	int i,j,nb_file_save;
 	int find;
 	char *rep_data, *nomfile_data;
 	char *tmp_string=NULL,*tmp2_string=NULL,*tmp3_string=NULL;
-	int tmp_string_len,tmp2_string_len,tmp3_string_len,ch='_';
+	int tmp_string_len,tmp2_string_len,tmp3_string_len;
 	struct dirent* entry=NULL;
 
 	rep_data=param->pshared->chemin;
@@ -412,7 +391,6 @@ void Find_dernier_enregistrement(struct param_pgm *param)
 
 
 	rep=opendir(rep_data);
-	file_save_exist=0;
 	nb_file_save=0;
 
 	while((entry=readdir(rep))!= NULL)

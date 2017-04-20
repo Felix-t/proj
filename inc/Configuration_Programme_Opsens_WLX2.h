@@ -1,17 +1,15 @@
 #ifndef CONFIGURATION_PGM__H
 #define CONFIGURATION_PGM__H
 
-#ifndef HEADERS__H
-#include "Headers.h"
-#endif
-
-
-
-#ifndef FUNCTIONS_UTILES__H
+#include "headers.h"
 #include "Fonctions_Utiles.h"
+
+#ifndef _INET_H
+#define _INET_H
+#include <netinet/tcp.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 #endif
-
-
 
 #define NB_CH 2
 
@@ -20,37 +18,34 @@
 
 struct config_save_file
 {
-float size_max_save_file;
-int usb;
-char *nom_projet;
-char *nomfic;
-char *rep_usb;
+	float size_max_save_file;
+	int usb;
+	char *nom_projet;
+	char *nomfic;
+	char *rep_usb;
 };
 
 struct config_meas
 {
-int mode_meas;
-int mode_debug;
-int sms_alert;
-int *select_ch; 
-char *type_jauge_ch[NB_CH];
-char *numero_jauge_ch[NB_CH];
-int (*GFx_jauge_ch)[4];
-int SAMPLingrate;
-int MEASureRATE;
-int Freq_echantillonnage;
+	int mode_meas;
+	int mode_debug;
+	int sms_alert;
+	int *select_ch; 
+	char *type_jauge_ch[NB_CH];
+	char *numero_jauge_ch[NB_CH];
+	int (*GFx_jauge_ch)[4];
+	int SAMPLingrate;
+	int MEASureRATE;
+	int Freq_echantillonnage;
+	float zeros[NB_CH];
 };
 
-//typedef struct config_meas sconfig_meas;
-//typedef struct config_save_file sconfig_save_file;
 
 struct config_all
 {
-struct config_save_file *pconfig_save_file;
-struct config_meas *pconfig_meas;
+	struct config_save_file *pconfig_save_file;
+	struct config_meas *pconfig_meas;
 };
-
-
 
 
 void Init_struct_config_save_file(struct config_save_file *pconfig_save_file, char *nom_projet,char *nomfic,char *rep_usb);
@@ -66,14 +61,5 @@ void Print_Init_struct_config_save_file(struct config_save_file *pconfig_save_fi
 void Print_struct_config_meas(struct config_meas *pconfig_meas);
 
 void Print_struct_config_all(struct config_all *pconfig);
-
-int Load_config_file(struct config_all *pconfig);
-
-
-
-
-
-
-
 
 #endif

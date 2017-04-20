@@ -1,13 +1,8 @@
 #ifndef CONNEXION__H
 #define CONNEXION__H
 
-#ifndef HEADERS__H
-#include "Headers.h"
-#endif
-
-#ifndef CONFIGURATION_PGM__H
+#include "headers.h"
 #include "Configuration_Programme_Opsens_WLX2.h"
-#endif
 
 #ifndef _INET_H
 #define _INET_H

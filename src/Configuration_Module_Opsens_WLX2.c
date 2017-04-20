@@ -1,6 +1,12 @@
+
+#define __USE_XOPEN
+#define _GNU_SOURCE
+
 #include "Configuration_Module_Opsens_WLX2.h" 
-
-
+#include <regex.h>
+#include <math.h>
+#include <sys/time.h>
+#include <time.h>
 
 /********************************************************/
 /*Fonction: Configuration_WLX2                          */
@@ -78,16 +84,13 @@ fin_Configuration_WLX2_SAMPLingrate_MEASureRATE:;
 /********************************************************/
 int Set_SAMPLingrate(struct parametres_connexion *param_connection, struct config_all *pconfig_all)
 {
-	int ok,ok_temp,nb_answer=NB_CH;
-	int i;
+	int ok,nb_answer=NB_CH;
 	char prefixe_command[100]="SYSTem:SAMPlingrate ";
-	char command2[100]="SYSTem:SAMPlingrate?";
-	char command[100]={'\0'},temp_str[100]={'\0'};
+	char command[100]={'\0'};
 	int SAMPLingrate;
-	char reponse_ok[3]="ok",wait_reponse[100]={'\0'};
-	char answer1[100]={'\0'}, answer2[100]={'\0'};
+	char wait_reponse[100]={'\0'};
 	char answer_Get_SAMPLingrate[100]={'\0'};
-	char answer_2[2][_RECEIVE_BUFF_SIZE]={'\0','\0'};
+	char answer_2[2][_RECEIVE_BUFF_SIZE]={"\0","\0"};
 
 
 	SAMPLingrate=pconfig_all->pconfig_meas->SAMPLingrate;
@@ -123,12 +126,7 @@ int Set_SAMPLingrate(struct parametres_connexion *param_connection, struct confi
 
 
 
-		ok_temp=0;
-		//while(ok_temp==0)
-		//{
 		sleep(10);
-		//ok_temp=Send_command_and_receive_answer_2(param_connection,"SYSTem:SAMPlingrate 100", nb_answer,answer_2, 0)==0;
-		//}
 
 		Zero_str(answer_Get_SAMPLingrate);
 		Get_SAMPLingrate(param_connection,answer_Get_SAMPLingrate);
@@ -154,31 +152,23 @@ ok_0:;
 /********************************************************/
 int Get_SAMPLingrate(struct parametres_connexion *param_connection, char *answer)
 {
-	int ok,nb_answer=NB_CH;
+	int nb_answer=NB_CH;
 	char command[100]="SYSTem:SAMPlingrate?";
-	char reponse_ok[3]="ok";
-	char answer_2[2][_RECEIVE_BUFF_SIZE]={'\0','\0'};
-	//, answer[100];
+	char answer_2[2][_RECEIVE_BUFF_SIZE]={"\0","\0"};
 
-	//printf("%s %s\n","Command to the instrument: ", command);
 	Zero_str(answer);
-	//printf("%s %s\n","Response of the instrument: ", answer);
-	//ok=Send_command_and_receive_answer(param_connection,command, answer, 0);
-	ok=Send_command_and_receive_answer_2(param_connection,command, nb_answer,answer_2, 0);
-	/*printf("%s %s\n","Response of the instrument: ", answer_2[0]);
-	  printf("%s %s\n","Response of the instrument: ", answer_2[1]);*/
+
+
+	if (!Send_command_and_receive_answer_2(param_connection,
+				command, nb_answer,answer_2, 0))
+		return 0;
+
 	memcpy(answer,answer_2[0],strlen(answer_2[0])*sizeof(char));
 
+	if(!Verification_response_from_device_is_err(answer))
+		return 0;	
 
-	if (ok)
-	{
-		if(Verification_response_from_device_is_err(answer)==0);
-		{
-			ok=0;
-		}
-	}
-
-	return ok;
+	return 1;
 }
 
 
@@ -191,53 +181,54 @@ int Get_SAMPLingrate(struct parametres_connexion *param_connection, char *answer
 /********************************************************/
 int Set_MEASureRATE(struct parametres_connexion *param_connection, struct config_all *pconfig_all)
 {
-	int ok,nb_answer=NB_CH;
-
 	char prefixe_command[100]="SYSTem:MEASure:RATE ";
-	char command[100]={'\0'},temp_str[100]={'\0'};
+	char command[100]={'\0'};
 	int MEASureRATE;
-	char reponse_ok[3]="ok", wait_reponse[100]={'\0'};
-	char answer1[100]={'\0'}, answer2[100]={'\0'};
-	char answer_2[2][_RECEIVE_BUFF_SIZE]={'\0','\0'};
+	char wait_reponse[100]={'\0'};
+	char answer_2[2][_RECEIVE_BUFF_SIZE]={"\0","\0"};
 	char answer_Get_MEASureRATE[100]={'\0'};
 
 	MEASureRATE=pconfig_all->pconfig_meas->MEASureRATE;
 	sprintf(wait_reponse, "%d", MEASureRATE);
-
-
-
+	
 	strcat(command,prefixe_command);
 	strcat(command,wait_reponse); 
 
 	Get_MEASureRATE(param_connection,answer_Get_MEASureRATE);
 	printf("\tMEASureRATE: %s",answer_Get_MEASureRATE);
 
-	ok=1;
 	if(Compare_2str(answer_Get_MEASureRATE,wait_reponse)==0)
 	{
 		Zero_str(answer_Get_MEASureRATE);
+
 		printf("\t%s\t ","-- Modification -->");
 		printf("MEASureRATE: %s\n",wait_reponse);
-		if(Send_command_and_receive_answer_2(param_connection,command, nb_answer,answer_2, 0))
+
+		if(!Send_command_and_receive_answer_2(param_connection,command,
+					NB_CH,answer_2, 0))
 		{  	
-			//printf("***---%s %s\n",answer_2[0],answer_2[1]);
-			// if(Compare_2str(reponse_ok, answer_2[0])==0){ok=0;goto ok_0;}
-			if(Compare_2str(wait_reponse, answer_2[0])==0){ok=0;goto ok_0;}
-		}else{ok=0;printf("\t%s %s %s\n","Echec: La commande ",command," n'a pas été prise en compte par WLX-2");goto ok_0;}
+			printf("\tEchec: La commande %s n'a pas été "
+				       "prise en compte par WLX-2\n",command);
+			return 0;
+		}
+		if(!Compare_2str(wait_reponse, answer_2[0]))
+			return 0;
 
 		sleep(1);
+
 		printf("\t%s", "Vérification de la configuration de ");
+
 		Zero_str(answer_Get_MEASureRATE);
 		Get_MEASureRATE(param_connection,answer_Get_MEASureRATE);
 		printf("MEASureRATE: %s",answer_Get_MEASureRATE);
-		if(Compare_2str(answer_Get_MEASureRATE,wait_reponse)==0){ok=0;}else{printf("\t%s\n","... ok");}
+
+		if(!Compare_2str(answer_Get_MEASureRATE,wait_reponse))
+			return 0;
+
+		printf("\t... ok\n");
 	}
 
-	//printf("%s\t","");
-
-ok_0:;
-
-     return ok;
+     return 1;
 }
 
 
@@ -247,31 +238,20 @@ ok_0:;
 /********************************************************/
 int Get_MEASureRATE(struct parametres_connexion *param_connection, char *answer)
 {
-	int ok,nb_answer=NB_CH;
-
 	char command[100]="SYSTem:MEASure:RATE?";
-	char reponse_ok[3]="ok";
-	char answer_2[2][_RECEIVE_BUFF_SIZE]={'\0','\0'};
-	//, answer[100];
-
-	//printf("%s %s\n","Command to the instrument: ", command);
+	char answer_2[2][_RECEIVE_BUFF_SIZE]={"\0","\0"};
+	
 	Zero_str(answer);
-	//printf("%s %s\n","Response of the instrument: ", answer);
-	//ok=Send_command_and_receive_answer(param_connection,command, answer, 0);
-	ok=Send_command_and_receive_answer_2(param_connection,command, nb_answer,answer_2, 0);
+	if(!Send_command_and_receive_answer_2(param_connection,command,
+			       NB_CH,answer_2, 0))
+		return 0;
+
 	memcpy(answer,answer_2[0],strlen(answer_2[0])*sizeof(char));
-	//printf("%s %s\n","Response of the instrument: ", answer);
-	//printf("****%s %s\n",answer_2[0], answer_2[1]);
 
-	if (ok)
-	{
-		if(Verification_response_from_device_is_err(answer)==0);
-		{
-			ok=0;
-		}
-	}
+	if(!Verification_response_from_device_is_err(answer))
+		return 0;
 
-	return ok;
+	return 1;
 }
 
 
@@ -336,11 +316,10 @@ int Configuration_WLX2_channel(struct parametres_connexion *param_connection, st
 
 	//Verif_liste_sensors(param_connection);
 
-fin_Configuration_WLX2_channel:;
+	//fin_Configuration_WLX2_channel:;
 
-			       return ok;
+	return ok;
 }
-
 
 
 
@@ -353,9 +332,7 @@ int Get_sensors_list(struct parametres_connexion *param_connection, char *answer
 	int ok,nb_answer=NB_CH;
 
 	char command[100]="SENSor:LIST?";
-	char reponse_ok[3]="ok";
-	//, answer[100];
-	char answer_2[2][_RECEIVE_BUFF_SIZE]={'\0','\0'};
+	char answer_2[2][_RECEIVE_BUFF_SIZE]={"\0","\0"};
 
 	//printf("%s %s\n","Command to the instrument: ", command);
 	Zero_str(answer);
@@ -386,13 +363,9 @@ int Get_sensors_list(struct parametres_connexion *param_connection, char *answer
 /********************************************************/
 int Analyse_get_sensors_list(char *str_sensor_list, struct sensor_def sensor_list[2])
 {
-	int i,j,i_nb_sensor,nb_sensor=2,ok,pos_cr,len_str_sensor_list;
-	char str[100]={'\0'},str_2[2][100]={'\0','\0'};
-	char *str_p;
-
-	//printf("%s\n",str_sensor_list);
-
-	len_str_sensor_list=strlen(str_sensor_list);
+	int i,j,i_nb_sensor = 0,nb_sensor=2;
+	char str[100]={'\0'},str_2[2][100]={"\0","\0"};
+	char *str_p, *token_tab_h, *token_cr;
 
 	strcat(str,str_sensor_list);
 
@@ -400,29 +373,18 @@ int Analyse_get_sensors_list(char *str_sensor_list, struct sensor_def sensor_lis
 	Zero_str(str);
 	strcat(str,str_p);
 
-
-	i_nb_sensor=0;
-
-	char *token_cr;
-
 	token_cr=strtok(str,"\r");
+
 	while(token_cr != NULL)
 	{
 		i_nb_sensor++;
-		//printf("***%d %s\n",i_nb_sensor,token_cr);
 		strcat(str_2[i_nb_sensor-1],token_cr);
 		token_cr=strtok(NULL,"\r");
 		if(i_nb_sensor>=nb_sensor){break;}
 	}
 
-	char *token_tab_h;
-
 	for (i=0;i<nb_sensor;i++)
 	{
-		//Zero_str(str_2);
-		//strcat(str_2,str);
-		//printf("---%d %s\n",i,str_2[i]);
-
 		token_tab_h=strtok(str_2[i],"\t");
 		j=-1;
 		while(token_tab_h!= NULL)
@@ -433,14 +395,11 @@ int Analyse_get_sensors_list(char *str_sensor_list, struct sensor_def sensor_lis
 			if(j==3){sensor_list[i].sensor_GF2=atoi(token_tab_h);}
 			if(j==4){sensor_list[i].sensor_GF3=atoi(token_tab_h);}
 			j++;
-			//printf("+++%s\n",token_tab_h);
 
 			token_tab_h=strtok(NULL,"\t");
 		}
-
 	}
-
-	return ok;
+	return 1;
 }
 
 
@@ -451,28 +410,20 @@ int Analyse_get_sensors_list(char *str_sensor_list, struct sensor_def sensor_lis
 /********************************************************/
 int Delete_all_sensor(struct parametres_connexion *param_connection)
 {
-	int ok,nb_answer=NB_CH;
-
 	char command[100]="SENSor:DELete:ALL";
 	char reponse_ok[3]="ok", answer[100];
-	char answer_2[2][_RECEIVE_BUFF_SIZE]={'\0','\0'};
+	char answer_2[2][_RECEIVE_BUFF_SIZE]={"\0","\0"};
 
-	//printf("%s %s\n","Command to the instrument: ", command);
 	Zero_str(answer);
-	//printf("%s %s\n","Response of the instrument: ", answer);
-	//ok=Send_command_and_receive_answer(param_connection,command, answer, 0);
-	ok=Send_command_and_receive_answer_2(param_connection,command, nb_answer,answer_2, 0);
 
-	if (ok)
-	{
-		if(Compare_2str(reponse_ok, answer_2[0])==0);
-		{
-			ok=Verification_response_from_device_is_err(answer_2[0]);
-		}
-	}
+	if(!Send_command_and_receive_answer_2(param_connection,command, 
+				NB_CH,answer_2, 0))
+		return 0;
 
+	if(!Compare_2str(reponse_ok, answer_2[0]))
+		return Verification_response_from_device_is_err(answer_2[0]);
 
-	return ok;
+	return 1;
 }
 
 
@@ -487,7 +438,7 @@ int Add_sensors(struct parametres_connexion *param_connection, struct config_all
 	char command[100]={'\0'};
 	char temp_str[100]={'\0'};
 	char reponse_ok[3]="ok", answer[100];
-	char answer_2[2][_RECEIVE_BUFF_SIZE]={'\0','\0'};
+	char answer_2[2][_RECEIVE_BUFF_SIZE]={"\0","\0"};
 	char GF0[10],GF1[10],GF2[10],GF3[10];
 	char type_jauge[10];
 	char temp2_str[100]={'\0'};
@@ -531,15 +482,11 @@ int Add_sensors(struct parametres_connexion *param_connection, struct config_all
 
 
 		printf("\t%s %d %s %s %s %s\n","capteur ",i," : ",pconfig_all->pconfig_meas->type_jauge_ch[j],pconfig_all->pconfig_meas->numero_jauge_ch[j],temp2_str);
-		//Print_struct_config_meas(pconfig_all->pconfig_meas);
 
 		Zero_str(answer);
 
-		//printf("%s %s\n","Command to the instrument: ", command);
-		//ok=Send_command_and_receive_answer(param_connection,command, answer, 0);
 		ok=Send_command_and_receive_answer_2(param_connection,command, nb_answer,answer_2, 0);
 
-		//printf("%s %s\n","Response of the instrument: ", answer);
 		if(ok)
 		{
 			ok=Compare_2str(reponse_ok, answer_2[0]);
@@ -587,13 +534,11 @@ int Add_sensors(struct parametres_connexion *param_connection, struct config_all
 /********************************************************/
 int Get_associate_sensors_to_channel(struct parametres_connexion *param_connection, struct config_all *pconfig_all, int number_channel)
 {
-	int ok,i,nb_answer=NB_CH;
 	int response_sensor_used;
 	char prefixe_command[100]="CHannel"; char suffixe_command[100]=":SENSor?";
 	char command[100];
 	char temp_str[100];
-	char reponse_ok[3]="ok", answer[100];
-	char answer_2[2][_RECEIVE_BUFF_SIZE]={'\0','\0'};
+	char answer_2[2][_RECEIVE_BUFF_SIZE]={"\0","\0"};
 
 
 	Zero_str(command);
@@ -602,24 +547,20 @@ int Get_associate_sensors_to_channel(struct parametres_connexion *param_connecti
 	strcat(command,temp_str); 
 	strcat(command,suffixe_command);
 
-	//printf("command Get_associate_sensors_to_channel %s\n",command);
 
-	ok=Send_command_and_receive_answer_2(param_connection,command, nb_answer,answer_2, 0);
-
-	//printf("%s %s\n",answer_2[0],answer_2[1]);
-	if (ok)
+	if(Send_command_and_receive_answer_2(param_connection,command,
+			NB_CH,answer_2, 0))
 	{
-		if (number_channel==1) {response_sensor_used=atoi(answer_2[0]);}
-		if (number_channel==2) {response_sensor_used=atoi(answer_2[1]);}
-	}else{
+		if (number_channel==1) 
+			response_sensor_used=atoi(answer_2[0]);
+		if (number_channel==2) 
+			response_sensor_used=atoi(answer_2[1]);
+	}
+	else{
 		response_sensor_used=0;
 	}
 
-
 	return response_sensor_used;
-
-
-
 }
 
 
@@ -637,7 +578,7 @@ int Associate_sensors_to_channel(struct parametres_connexion *param_connection, 
 	char command[100];
 	char temp_str[100];
 	char reponse_ok[3]="ok", answer[100];
-	char answer_2[2][_RECEIVE_BUFF_SIZE]={'\0','\0'};
+	char answer_2[2][_RECEIVE_BUFF_SIZE]={"\0","\0"};
 
 	/*
 	   printf("%s\n"," ");
@@ -658,13 +599,10 @@ int Associate_sensors_to_channel(struct parametres_connexion *param_connection, 
 		strcat(command,temp_str);
 
 
-		printf("\t%s %d  %s %d \n","canal ",i, "-> capteur ", i);
+		printf("\tcanal  %d  -> capteur  %d \n", i, i);
 
 		Zero_str(answer);
-		//printf("%s %s\n","Command to the instrument: ", command);
-		//ok=Send_command_and_receive_answer(param_connection,command, answer, 0);
 		ok=Send_command_and_receive_answer_2(param_connection,command, nb_answer,answer_2, 0);
-		//printf("%s %s\n","Response of the instrument: ", answer);
 		if(ok)
 		{
 			ok=Compare_2str(reponse_ok, answer_2[0]);
@@ -700,13 +638,11 @@ int Associate_sensors_to_channel(struct parametres_connexion *param_connection, 
 /********************************************************/
 int Get_status_channel(struct parametres_connexion *param_connection, struct config_all *pconfig_all, int number_channel)
 {
-	int ok,i,nb_answer=NB_CH;
 	int response_sensor_used;
 	char prefixe_command[100]="CHannel"; char suffixe_command[100]=":ENABle?";
 	char command[100];
 	char temp_str[100];
-	char reponse_ok[3]="ok", answer[100];
-	char answer_2[2][_RECEIVE_BUFF_SIZE]={'\0','\0'};
+	char answer_2[2][_RECEIVE_BUFF_SIZE]={"\0","\0"};
 
 
 	Zero_str(command);
@@ -715,24 +651,18 @@ int Get_status_channel(struct parametres_connexion *param_connection, struct con
 	strcat(command,temp_str); 
 	strcat(command,suffixe_command);
 
-	//printf("command Get_status_sensors %s\n",command);
-
-	ok=Send_command_and_receive_answer_2(param_connection,command, nb_answer,answer_2, 0);
-
-	//printf("Response: %s %s\n",answer_2[0],answer_2[1]);
-	if (ok)
+	if(Send_command_and_receive_answer_2(param_connection,command,
+				NB_CH,answer_2, 0))
 	{
-		if (number_channel==1) {response_sensor_used=atoi(answer_2[0]);}
-		if (number_channel==2) {response_sensor_used=atoi(answer_2[1]);}
-	}else{
-		response_sensor_used=0;
+		if (number_channel==1) 
+			response_sensor_used=atoi(answer_2[0]);
+		if (number_channel==2) 
+			response_sensor_used=atoi(answer_2[1]);
 	}
-
+	else
+		response_sensor_used=0;
 
 	return response_sensor_used;
-
-
-
 }
 
 
@@ -745,12 +675,11 @@ int Get_status_channel(struct parametres_connexion *param_connection, struct con
 /********************************************************/
 int Desactivation_channel(struct parametres_connexion *param_connection, int i_channel)
 {
-	int ok,i,nb_answer=NB_CH;
 	char prefixe_command[100]="CHannel";
 	char command[100];
 	char temp_str[100];
 	char reponse_ok[3]="ok", answer[100];
-	char answer_2[2][_RECEIVE_BUFF_SIZE]={'\0','\0'};
+	char answer_2[2][_RECEIVE_BUFF_SIZE]={"\0","\0"};
 
 	Zero_str(temp_str);Zero_str(command);
 
@@ -759,20 +688,13 @@ int Desactivation_channel(struct parametres_connexion *param_connection, int i_c
 	strcat(command,temp_str); 
 	strcat(command,":DISAble ");
 
-
 	Zero_str(answer);
-	//printf("%s %s\n","Command to the instrument: ", command);
-	//ok=Send_command_and_receive_answer(param_connection,command, answer, 0);
-	ok=Send_command_and_receive_answer_2(param_connection,command, nb_answer,answer_2, 0);
-	//printf("%s %s\n","Response of the instrument: ", answer);
-	if(ok)
-	{
-		ok=Compare_2str(reponse_ok, answer_2[0]);
-	}
 
+	if(Send_command_and_receive_answer_2(param_connection,command,
+			NB_CH,answer_2, 0))
+		return Compare_2str(reponse_ok, answer_2[0]);
 
-
-	return ok;
+	return 0;
 }
 
 
@@ -789,12 +711,11 @@ int Desactivation_channel(struct parametres_connexion *param_connection, int i_c
 /********************************************************/
 int Activation_channel(struct parametres_connexion *param_connection, int i_channel)
 {
-	int ok,i,nb_answer=NB_CH;
 	char prefixe_command[100]="CHannel";
 	char command[100];
 	char temp_str[100];
 	char reponse_ok[3]="ok", answer[100];
-	char answer_2[2][_RECEIVE_BUFF_SIZE]={'\0','\0'};
+	char answer_2[2][_RECEIVE_BUFF_SIZE]={"\0","\0"};
 
 	Zero_str(temp_str);Zero_str(command);
 
@@ -805,18 +726,11 @@ int Activation_channel(struct parametres_connexion *param_connection, int i_chan
 
 
 	Zero_str(answer);
-	//printf("%s %s\n","Command to the instrument: ", command);
-	//ok=Send_command_and_receive_answer(param_connection,command, answer, 0);
-	ok=Send_command_and_receive_answer_2(param_connection,command, nb_answer,answer_2, 0);
-	//printf("%s %s\n","Response of the instrument: ", answer);
-	if(ok)
-	{
-		ok=Compare_2str(reponse_ok, answer_2[0]);
-	}
+	if(Send_command_and_receive_answer_2(param_connection,command,
+				NB_CH,answer_2, 0))
+		return Compare_2str(reponse_ok, answer_2[0]);
 
-
-
-	return ok;
+	return 0;
 }
 
 
@@ -831,50 +745,42 @@ int Activation_channel(struct parametres_connexion *param_connection, int i_chan
 /********************************************************/
 int Activation_channels(struct parametres_connexion *param_connection, struct config_all *pconfig_all)
 {
-	int ok,ok_t,i,j;
-	int response_get_status_channel;
+	int i,j;
 
-	ok_t=1;
 	for(i=1;i<=NB_CH;i++)
 	{
 		j=i-1;
+
 		if(pconfig_all->pconfig_meas->select_ch[j]==1)
 		{
-			ok=Activation_channel(param_connection, i);
-			if(ok)
-			{
-				printf("\t%s %d %s\n","canal ",i," activé");
-				ok=1;
-			}
-		}else{
-			ok=Desactivation_channel(param_connection, i);
-			printf("\t%s %d %s\n","canal ",i," non activé");
-			ok=1;
+			if(!Activation_channel(param_connection, i))
+				return 0;
+			printf("\t%s %d %s\n","canal ",i," activé");
 		}
-
-		ok_t=ok_t*ok;
-	}
-
-
-	if (ok)
-	{
-		printf("\t%s\t","Vérification de l'activation des cannaux de mesure ");
-
-		for(i=1;i<=NB_CH;i++)
+		else
 		{
-			response_get_status_channel=Get_status_channel(param_connection,pconfig_all,i);
-			j=i-1;
-			//printf("%d ++ %d %d\n",i,response_get_status_channel,pconfig_all->pconfig_meas->select_ch[j]);
-			if (response_get_status_channel!=pconfig_all->pconfig_meas->select_ch[j]){printf("%s\n","... error");ok=0;break;}
+			Desactivation_channel(param_connection, i);
+			printf("\t%s %d %s\n","canal ",i," non activé");
 		}
-		if (ok){printf("%s\n","... ok");}
 	}
 
 
+	printf("\t%s\t","Vérification de l'activation des cannaux de mesure ");
 
+	for(i=1;i<=NB_CH;i++)
+	{
+		j=i-1;
 
+		if(Get_status_channel(param_connection, pconfig_all, i) !=
+				pconfig_all->pconfig_meas->select_ch[j])
+		{
+			printf("%s\n","... error");
+			return 0;
+		}
+	}
+	printf("... ok\n");
 
-	return ok;
+	return 1;
 }
 
 
@@ -888,13 +794,11 @@ int Activation_channels(struct parametres_connexion *param_connection, struct co
 /********************************************************/
 int Configuration_WLX2_date_time(struct parametres_connexion *param_connection)
 {
-	int i,ok=1,ok_saisie,ok_date_time_modif;
+	int ok=1,ok_saisie,ok_date_time_modif;
 	int ok_diff_time,choix_modif_date_time; 
-	char answer[_RECEIVE_BUFF_SIZE];
 	char str_ans_time[9]={'\0'},str_ans_date[11]={'\0'};
 	char c,modif_date_time[100]={'\0'};
 	char *curent_time_RPI,current_time_WLX2[100]={'\0'};
-	char espace_str[2]=" ";
 
 	char *choix_possible_modif_date_time_WLX2[5]={"o","n-d","n-h","n-d-h","n-h-d"};
 	int nb_choix_possible_modif_date_time_WLX2=5;
@@ -1044,8 +948,8 @@ int Get_date_time_from_WLX2(struct parametres_connexion *param_connection, char 
 	char espace_str[2]=" ";
 	char temp_string[50]={'\0'};
 
-	char answer_date[2][_RECEIVE_BUFF_SIZE]={'\0','\0'};
-	char answer_time[2][_RECEIVE_BUFF_SIZE]={'\0','\0'};
+	char answer_date[2][_RECEIVE_BUFF_SIZE]={"\0","\0"};
+	char answer_time[2][_RECEIVE_BUFF_SIZE]={"\0","\0"};
 
 	//ok=Send_command_and_receive_answer(param_connection,"DATE?", str_ans_date, 0);
 	ok=Send_command_and_receive_answer_2(param_connection,"SYSTem:DATE?", nb_answer ,answer_date, 0);
@@ -1091,7 +995,7 @@ int Date_time_saisie(struct parametres_connexion *param_connection, int choix_mo
 {
 	/*choix_modif=0 ->date et time ; choix_modif=1 ->time ; choix_modif=2 ->date*/
 	int ok,ok_time=0,ok_date=0;
-	int err,match,len;
+	int len;
 	char modif_time[9],modif_date[11];
 	char *str_regex_modif_time="[0-2][0-9]\\:[0-5][0-9]\\:[0-5][0-9]";
 	char *str_regex_modif_date="20[1-9][1-9]\\-[0-1][0-9]\\-[0-3][0-9]";
@@ -1100,7 +1004,7 @@ int Date_time_saisie(struct parametres_connexion *param_connection, int choix_mo
 
 	if ((choix_modif==0)||(choix_modif==1))
 	{
-		err=regcomp(&preg_time, str_regex_modif_time, REG_NOSUB);
+		regcomp(&preg_time, str_regex_modif_time, REG_NOSUB);
 		printf("\t%s\n\t...","Indiquer la nouvelle heure au format [HH:MM:SS]");
 		fgets_stdin(modif_time,sizeof(modif_time));
 		while (ok_time==0)
@@ -1120,7 +1024,7 @@ int Date_time_saisie(struct parametres_connexion *param_connection, int choix_mo
 
 	if ((choix_modif==0)||(choix_modif==2))
 	{
-		err=regcomp(&preg_date, str_regex_modif_date, REG_NOSUB);
+		regcomp(&preg_date, str_regex_modif_date, REG_NOSUB);
 		printf("\t%s\n\t...","Indiquer la nouvelle date au format [YYYY-MM-DD]");
 		fgets_stdin(modif_date,sizeof(modif_date));
 
@@ -1153,8 +1057,7 @@ int Date_time_saisie(struct parametres_connexion *param_connection, int choix_mo
 /********************************************************/
 int Get_date_time_from_RPI(char *current_time)
 {
-	int ok=1;
-	int day,month,year,hour,minute,second,microsecond;
+	int day,month,year,hour,minute,second;
 
 	struct timeval tp;
 	struct tm *t;
@@ -1165,20 +1068,16 @@ int Get_date_time_from_RPI(char *current_time)
 	curtime=tp.tv_sec;
 	t=localtime(&curtime);
 
-
-
 	day=t->tm_mday;
 	month=t->tm_mon+1;
 	year=t->tm_year+1900;
 	hour=t->tm_hour;
 	minute=t->tm_min;
-	second=t->tm_sec,
-		microsecond=tp.tv_usec/1000;
+	second=t->tm_sec;
 
-	//printf("%02d/%02d/%04d  %02d:%02d:%02d.%03d",day,month,year,hour,minute,second,microsecond);
 	sprintf(current_time,"%04d-%02d-%02d %02d:%02d:%02d",year,month,day,hour,minute,second);
 
-	return ok;
+	return 1;
 }
 
 
@@ -1189,56 +1088,18 @@ int Get_date_time_from_RPI(char *current_time)
 /********************************************************/
 int Compare_date_time_RPI_WLX2(char *current_time_RPI, char *current_time_WLX2)
 {
-	int i,ok=1;
-	int ok_date_c,ok_date=1;
-	int ok_date_time,ok_time=1;
-	char temp_current_time_RPI[9]="",temp_current_time_WLX2[9]="";
 	struct tm tm_current_time_RPI,tm_current_time_WLX2;
 	double diff_t;
-
 
 	strptime(current_time_RPI,"%Y-%m-%d %H:%M:%S",&tm_current_time_RPI);
 	strptime(current_time_WLX2,"%Y-%m-%d %H:%M:%S",&tm_current_time_WLX2);
 
-	/*
-	   int day,month,year,hour,minute,second;
-	   day=tm_current_time_RPI.tm_mday;
-	   month=tm_current_time_RPI.tm_mon+1;
-	   year=tm_current_time_RPI.tm_year+1900;
-	   hour=tm_current_time_RPI.tm_hour;
-	   minute=tm_current_time_RPI.tm_min;
-	   second=tm_current_time_RPI.tm_sec,
-	   printf("%02d/%02d/%04d  %02d:%02d:%02d\n",day,month,year,hour,minute,second);
-
-	   day=tm_current_time_WLX2.tm_mday;
-	   month=tm_current_time_WLX2.tm_mon+1;
-	   year=tm_current_time_WLX2.tm_year+1900;
-	   hour=tm_current_time_WLX2.tm_hour;
-	   minute=tm_current_time_WLX2.tm_min;
-	   second=tm_current_time_WLX2.tm_sec,
-	   printf("%02d/%02d/%04d  %02d:%02d:%02d\n",day,month,year,hour,minute,second);
-
-	   char buffer[100];
-	   struct tm info;
-	   mktime(&tm_current_time_RPI);
-	   strftime(buffer, sizeof(buffer),"%c",&tm_current_time_RPI);
-	   printf("%s\n",buffer);
-
-	   getchar();
-	   */
-
-
 	diff_t=difftime(mktime(&tm_current_time_RPI),mktime(&tm_current_time_WLX2)); 
 
-	//printf("%lf\n",diff_t);
 	if (fabs(diff_t)>60)
-	{
-		ok=0;
-	}else{
-		ok=1;
-	}
-
-	return ok;
+		return 0;
+	else
+		return 1;
 }
 
 
@@ -1276,13 +1137,14 @@ int Change_date_time_RPI(char *current_time)
 	strcat(command_date,"sh Source/Script__Update_date_time_RPI.sh ");
 	strcat(command_date,"\"");strcat(command_date,date);strcat(command_date,"\"");
 	//printf("%s\n",command_date);
-	ok=Execute_file_sh_sans_retour_info(command_date);
 
-	if (ok)
+	if (Execute_file_sh_sans_retour_info(command_date))
 	{
 		strcat(command_time,"sh Source/Script__Update_date_time_RPI.sh ");
-		strcat(command_time,"\"");strcat(command_time,time);strcat(command_time,"\"");
-		//printf("%s\n",command_time);
+		strcat(command_time,"\"");
+		strcat(command_time,time);
+		strcat(command_time,"\"");
+
 		ok=Execute_file_sh_sans_retour_info(command_time);
 	}
 
@@ -1303,10 +1165,8 @@ int Change_date_time_RPI(char *current_time)
 /********************************************************/
 int Change_date_WLX2(struct parametres_connexion *param_connection, char *current_date)
 {
-	int ok,nb_answer=NB_CH;
 	char command[100]="SYSTem:DATE ";
-	char answer[100];
-	char answer_2[2][_RECEIVE_BUFF_SIZE]={'\0','\0'};
+	char answer_2[2][_RECEIVE_BUFF_SIZE]={"\0","\0"};
 	char *c;
 
 	for (c=current_date;*c;c++)
@@ -1314,15 +1174,10 @@ int Change_date_WLX2(struct parametres_connexion *param_connection, char *curren
 		if (*c=='-'){memset(c,',',1);}
 	}
 
-	//printf("%s\n",current_date);
 	strcat(command,current_date);
 
-	//printf("%s %s\n","Command to the instrument: ", command);
-	//ok=Send_command_and_receive_answer(param_connection,command, answer, 0);
-	ok=Send_command_and_receive_answer_2(param_connection,command, nb_answer,answer_2, 0);
-	//printf("%s %s\n","Response of the instrument: ", answer);
-
-	return ok;
+	return Send_command_and_receive_answer_2(param_connection,command,
+			NB_CH,answer_2, 0);
 }
 
 
@@ -1334,29 +1189,19 @@ int Change_date_WLX2(struct parametres_connexion *param_connection, char *curren
 /********************************************************/
 int Change_time_WLX2(struct parametres_connexion *param_connection, char *current_time)
 {
-	int ok=1,nb_answer=NB_CH;
 
 	char command[100]="SYSTem:TIME ";
-	char answer[100];
-	char answer_2[2][_RECEIVE_BUFF_SIZE]={'\0','\0'};
+	char answer_2[2][_RECEIVE_BUFF_SIZE]={"\0","\0"};
 	char *c;
 
 	for (c=current_time;*c;c++)
 	{
-		if (*c==':'){memset(c,',',1);}
+		if (*c==':')
+			memset(c,',',1);
 	}
 
 	strcat(command,current_time);
 
-	//printf("%s %s\n","Command to the instrument: ", command);
-	//ok=Send_command_and_receive_answer(param_connection,command, answer, 0);
-	ok=Send_command_and_receive_answer_2(param_connection,command, nb_answer,answer_2, 0);
-
-	//printf("%s %s\n","Response of the instrument: ", answer);
-
-	return ok;
+	return Send_command_and_receive_answer_2(param_connection,command,
+			NB_CH,answer_2, 0);
 }
-
-
-
-

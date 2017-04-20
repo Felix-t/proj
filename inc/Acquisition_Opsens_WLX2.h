@@ -1,70 +1,48 @@
 #ifndef ACQUISITION__H
 #define ACQUISITION__H
 
-#ifndef HEADERS__H
-#include "Headers.h"
-#endif
-
-#ifndef CONFIGURATION_PGM__H
+#include "headers.h"
 #include "Configuration_Programme_Opsens_WLX2.h"
-#endif
-
-#ifndef CONNEXION__H
 #include "Connexion_Opsens_WLX2.h"
-#endif
-
-#ifndef FUNCTIONS_UTILES__H
 #include "Fonctions_Utiles.h"
-#endif
-
-#ifndef PREPARATION_ACQ__H
 #include "Preparation_acquisition_Opsens_WLX2.h"
-#endif
+#include "sigfox.h"
 
+#define _MAX_FLOAT_MEASURES ((_UDP_MAX_PACKET_SIZE-sizeof(struct stUDPSendMeasureHeader_t))/sizeof(float))
 
 struct stUDPMeasureHeader_t
 {
-uint16_t ui16DataSize;
-uint8_t ui8DataType;
-uint8_t ui8ModuleID;
-uint8_t ui8ChannelID;
-uint8_t ui8MeasureUnit;
-uint16_t ui16Year;
-uint8_t ui8Month;
-uint8_t ui8Day;
-uint8_t ui8Hour;
-uint8_t ui8Min;
-uint8_t ui8Seconds;
-uint8_t ui810thOfSeconds;
+	uint16_t ui16DataSize;
+	uint8_t ui8DataType;
+	uint8_t ui8ModuleID;
+	uint8_t ui8ChannelID;
+	uint8_t ui8MeasureUnit;
+	uint16_t ui16Year;
+	uint8_t ui8Month;
+	uint8_t ui8Day;
+	uint8_t ui8Hour;
+	uint8_t ui8Min;
+	uint8_t ui8Seconds;
+	uint8_t ui810thOfSeconds;
 };
 
 
 struct stUDPSendMeasureHeader_t
 {
-uint16_t ui16DataID;
-uint8_t ui8SegmentID;
-uint8_t ui8SegmentQty;
-struct stUDPMeasureHeader_t stMeasureHeader;
+	uint16_t ui16DataID;
+	uint8_t ui8SegmentID;
+	uint8_t ui8SegmentQty;
+	struct stUDPMeasureHeader_t stMeasureHeader;
 };
 
 
-#define _MAX_FLOAT_MEASURES ((_UDP_MAX_PACKET_SIZE-sizeof(struct stUDPSendMeasureHeader_t))/sizeof(float))
 
 struct stUDPSendMeasureType_t
 {
-struct stUDPSendMeasureHeader_t stHeader;
-float fMeasure[_MAX_FLOAT_MEASURES];
+	struct stUDPSendMeasureHeader_t stHeader;
+	float fMeasure[_MAX_FLOAT_MEASURES];
 };
 
-struct sendToSgf
-{
-	float mean;
-	float std_dev;
-	float min;
-	float max;
-};
-
-void stats(struct stUDPSendMeasureType_t *ch1, struct stUDPSendMeasureType_t *ch2, int nb_measures);
 
 int Open_file_Enregistrement_data(struct param_pgm *param);
 
