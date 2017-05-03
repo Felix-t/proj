@@ -282,7 +282,7 @@ float Calcul_free_space(char *chemin, int ok_print)
 				multiple=1000.0;
 				break;
 			case 'G':
-				multiple=1000000.0;
+				multiple=1048756.0;
 				break;
 		}
 

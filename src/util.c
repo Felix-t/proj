@@ -1,8 +1,32 @@
 #include "util.h"
+#include "Fonctions_Utiles.h"
+#include "cfg.h"
 #include <dirent.h>
 #include <errno.h>
 
 static uint8_t exec_compression(char * path);
+static uint8_t delete_data(char * path);
+
+
+uint8_t get_temp()
+{
+	if(system("/bin/cat /sys/class/thermal/thermal_zone0/temp >> "
+				"logs/temp.log") != -1)
+		return 1;
+	printf("Error during temperature monitoring\n");
+	return 0;
+}
+
+
+uint8_t get_cpu_usage()
+{
+	if(system("/usr/bin/top -b -n1 | grep average >> logs/cpu.log") != -1)
+		return 1;
+	printf("Error during CPU monitoring\n");
+	return 0;
+}
+
+
 
 uint8_t copy(char *source, char *dest)
 {
@@ -92,11 +116,40 @@ uint8_t set_next_startup(int32_t startup_time)
 	return 1;
 }
 
+
+// Exec sudo shutdown -t 1 to poweroff the system in 1 min
+uint8_t program_shutdown()
+{
+	FILE *fp;
+	char str[100] = "";
+	pid_t pid = fork();
+	if(pid == 0)
+	{
+		execl("/sbin/shutdown", "/sbin/shutdown", "-t", "1", (char *) 0);
+		exit(0);
+	}
+	else if (pid < 0) {
+		printf(" error - couldn't start process");
+		return 0;
+	}
+	else {
+		sleep(TIMEOUT);
+		pid_t ws = waitpid( pid, NULL,0);
+		if (ws == -1)
+		{
+			printf("Error during shutdown cmd");
+			return 0;
+		}
+	}
+	return 1;
+}
+
+
 uint8_t move_logs()
 {
 	pid_t pid = fork();
 	if (pid == 0) { /* child */
-		execl("/bin/cp", "/bin/cp", "-u", "-r", "/home/pi/projet/logs/", "Data/", (char *) 0);
+		execl("/bin/mv", "/bin/mv", "/home/pi/projet/logs/*", "Data/logs/", (char *) 0);
 		exit(0);
 	}
 	else if (pid < 0) {
@@ -112,7 +165,12 @@ uint8_t move_logs()
 			return 0;
 		}
 	}
-	return 1;
+	
+	if(system("journalctl -u acq_surffeol > /home/pi/projet/logs/out") != -1)
+		return 1;
+	else 
+		printf("Error during temperature monitoring\n");
+	return 0;
 }
 
 uint8_t start_dhcp_server()
@@ -202,6 +260,10 @@ uint8_t archive_data()
 	char file_name[100]="\0";
 	char dir_name[100] = TEMPUSB;
 
+	// Get the config
+	char *cfg_name[1] = {"USB_SIZE"};
+	double usb_size;
+
 	//Add time to the name of the file
 	time_t t = time(NULL);
 	int month = localtime(&t)->tm_mon;
@@ -209,7 +271,7 @@ uint8_t archive_data()
 	int day = localtime(&t)->tm_mday;
 	sprintf(file_name, "%i_%i_%i_data.tar.lrz", day, month, year);
 
-	//Look if there is no file named file_name, change file_name accordingly
+	//Look if there is no file named TEMPUSB
 	if (NULL == (FD = opendir(TEMPUSB))) 
 	{
 		fprintf(stderr, "Error : Failed to open input directory - %s\n",
@@ -228,8 +290,45 @@ uint8_t archive_data()
 	}
 
 	strcat(dir_name, file_name);
-	printf("Compressed to %s\n", dir_name);
-	return exec_compression(dir_name);
+	printf("Trying to compress to %s...\n", dir_name);
+	get_cfg(&usb_size, cfg_name, 1);
+	if (Calcul_free_space(TEMPUSB, 1) < (1048756.0*usb_size*0.03))
+	{
+		printf("Not enough space\n");
+		return 0;
+	}
+	if(!exec_compression(dir_name))
+		return 0;
+	if(!delete_data(TEMPUSB))
+		return 0;
+	printf("Done\n");
+	return 1;
+}
+
+
+static uint8_t delete_data(char * path)
+{
+	pid_t pid = fork();
+	if (pid == 0) { /* child */
+		execl("/bin/rm", "/bin/rm", "-r", "Data/Data/*", "Data/save", (char *)0); //@TODO : remplacer Data/ par const ou config
+		exit(0);
+	}
+	else if (pid < 0) {
+		printf(" error - couldn't start process");
+		return 0;
+	}
+	else {
+		sleep(TIMEOUT);
+		pid_t ws = waitpid( pid, NULL, WNOHANG);
+		if (ws == -1)
+		{
+			printf("Error during deletion of Data/");
+			return 0;
+		}
+		//execl("/bin/rm", "/bin/rm", "-r", "-f", "Data/Data/", (char *) 0);
+		return 1;
+	}
+	return 1;
 }
 
 
@@ -247,7 +346,7 @@ static uint8_t exec_compression(char * path)
 	}
 	else {
 		sleep(TIMEOUT);
-		pid_t ws = waitpid( pid, NULL,0);
+		pid_t ws = waitpid( pid, NULL, WNOHANG);
 		if (ws == -1)
 		{
 			printf("Error during compression");

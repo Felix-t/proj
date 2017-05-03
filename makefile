@@ -1,4 +1,4 @@
-.PHONY: clean all copy rec
+.PHONY: clean all copy rec clean_data arm
 
 CC=gcc
 
@@ -8,7 +8,7 @@ BDIR=bin
 HDIR=inc
 
 LIBS=-lbcm2835 -pthread -lconfig -lm
-CFLAGS = -I$(HDIR) -D_MAIN_
+CFLAGS = -I$(HDIR) -D_MAIN_ 
 
 DEPS = $(wildcard $(HDIR)/*.h)
 
@@ -17,7 +17,7 @@ OBJS = $(wildcard $(ODIR)/*.o)
 
 SRC = $(wildcard $(SDIR)/*.c)
 
-$(BDIR)/acq_surffeol: $(OBJS) $(OBJ) 
+$(BDIR)/acq_surffeol: $(OBJS) $(OBJ)
 	gcc -o $@ $(ODIR)/*.o $(LIBS)
 
 $(ODIR)/%.o: $(SDIR)/%.c $(HDIR)/%.h
@@ -45,3 +45,5 @@ clean:
 	rm -f $(ODIR)/*.o $(BDIR)/*
 #cd Interrogateur_Opsens/ && make clean
 
+clean_data:
+	rm -rf Data/Data/* tempUSB/* logs/* Data/save

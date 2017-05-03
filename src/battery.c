@@ -1,9 +1,12 @@
 #include "battery.h"
+#include "sigfox.h"
+#include <math.h>
 
 static uint8_t ad_board_setup();
 static void set_acq_time(int32_t volt, double *value);
 static uint8_t check_battery(int32_t volt);
 static void battery_cleanup(void * arg);
+static void stats(float volt, float min_volt, float max_volt);
 
 typedef struct cleanup_args{
 	FILE * fp;
@@ -74,6 +77,48 @@ void *battery(void *arg)
 	pthread_exit((void *) 1);
 }
 
+void stats(float volt, float min_volt, float max_volt)
+{
+	pthread_t thread;
+	static uint32_t count;
+	static float min, max, sum, sum_square;
+	struct sgf_data data_to_send = {
+		.id = AD_CONVERTER };
+
+	pthread_attr_t attr;
+	pthread_attr_init(&attr);
+	pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+
+
+	static time_t new_cycle;
+	if(!new_cycle)
+		new_cycle = time(NULL);
+
+	if(volt > max)
+		max = volt;
+	else if (volt < min)
+		min = volt;
+	sum += volt;
+	sum_square += volt;
+	count++;
+
+	if(difftime(time(NULL), new_cycle) > SGF_SEND_PERIOD/10)
+	{
+		data_to_send.min = min;
+		data_to_send.max = max;
+		data_to_send.mean = (sum/count - min_volt) /
+			(max_volt - min_volt);
+		data_to_send.std_dev = sqrt(sum_square/count - 
+				data_to_send.mean*data_to_send.mean);
+		pthread_create(&thread, &attr, send_sigfox, (void*) &data_to_send);
+		sum = 0;
+		sum_square = 0;
+		count = 0;
+	}
+
+	pthread_attr_destroy(&attr);
+}
+
 /*
  * check_battery : Read and update config to decide whether to shutdown or not
  * Param : The measured voltage
@@ -100,9 +145,12 @@ static uint8_t check_battery(int32_t volt)
 	{
 		//Order of string here should be same order as in cfg.h enum
 		char *str[NB_CFG_BATTERY] = {"MAX_VOLT", "MIN_VOLT",
-			"THRESHOLD", "LAST_DISCHARGE","ACQ_TIME",};
+			"THRESHOLD", "LAST_DISCHARGE","ACQ_TIME"};
 		get_cfg(value, str,  NB_CFG_BATTERY);
-		set_acq_time(volt, value);
+		
+		// Uncomment to have duration of acquisition dependent on 
+		// last acquisition :
+		//set_acq_time(volt, value);
 		treshold = value[MIN_VOLT] + 
 			(value[MAX_VOLT] - value[MAX_VOLT])*value[THRESHOLD];
 	}
@@ -129,6 +177,7 @@ static uint8_t check_battery(int32_t volt)
 		return 0;
 	}
 
+	stats(volt / 1000000, value[MIN_VOLT], value[MAX_VOLT]);
 	return 1;
 }
 

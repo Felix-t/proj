@@ -798,6 +798,9 @@ static void stats(struct stUDPSendMeasureType_t *ch1,
 	static struct sgf_data data_to_send[2];
 	static pthread_t th[2];
 
+	pthread_attr_t attr;
+	pthread_attr_init(&attr);
+	pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
 
 	nb_data += nb_measures;
 
@@ -831,10 +834,6 @@ static void stats(struct stUDPSendMeasureType_t *ch1,
 	if(difftime(time(NULL), new_cycle) > SGF_SEND_PERIOD)
 	{
 
-		pthread_attr_t attr;
-		pthread_attr_init(&attr);
-		pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
-
 		// Create the struct with the calculated statistics, 
 		// and create the thread to send this struct
 		for(i=0;i<NB_CH;i++)
@@ -858,9 +857,9 @@ static void stats(struct stUDPSendMeasureType_t *ch1,
 		}
 
 		nb_data = 0;
-		pthread_attr_destroy(&attr);
 		new_cycle = time(NULL);
 	}
+	pthread_attr_destroy(&attr);
 }
 
 

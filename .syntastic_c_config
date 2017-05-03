@@ -1,2 +1,3 @@
 -Iinc/
 -IInterrogateur_Opsens/Include
+-Iarmapi/bindings/c

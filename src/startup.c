@@ -16,6 +16,7 @@
 #include "accelerometer.h"
 #include "battery.h"
 #include "sigfox.h"
+#include <math.h>
 
 static uint8_t start_AD_acq(pthread_t *battery_thread, _Atomic uint8_t *alive);
 static uint8_t start_WLX2_acq(pthread_t *WLX2_thread, _Atomic uint8_t *alive);
@@ -94,18 +95,43 @@ static uint8_t start_WLX2_acq(pthread_t *WLX2_thread, _Atomic uint8_t *alive)
 static void *test()
 {
 	printf("Thread test created id : %li\n", syscall(__NR_gettid));
-	sleep(3600*15+2000);
+
+	pthread_t thread;
+	pthread_attr_t attr;
+
+	unsigned int i;
+
+	pthread_attr_init(&attr);
+	pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+
+	struct sgf_data data_to_send = {
+		.id = AD_CONVERTER,
+		.min = 1,
+		.max = 2,
+		.std_dev = 5,
+		.mean = 5};
+
+	pthread_create(&thread, &attr, send_sigfox, (void *) &data_to_send);
+	for(i = 0; i < 15;i++)
+	{	
+		get_cpu_usage();
+		get_temp();
+		sleep(60);
+	}
+
 	end_program = 1;
+	pthread_attr_destroy(&attr);
 	pthread_exit((void *) 1);
 }
 
-
 int  main()
-{
+{	
 	uint8_t i = 0;
 	uint8_t nb_threads = SGF_ENABLE + LSM9DS0_ENABLE + WLX2_ENABLE +1;
 	pthread_t *threads = malloc(nb_threads*sizeof(pthread_t));
 	_Atomic uint8_t alive[nb_threads];
+
+	pthread_mutex_init(&sgf_msg.mutex, NULL);
 
 	printf("Main thread ID : %li\n", syscall(__NR_gettid));
 
@@ -142,12 +168,12 @@ int  main()
 		pthread_join(threads[i], NULL);
 	}
 
+	pthread_mutex_destroy(&sgf_msg.mutex);
 	free(threads);
 	if(!move_logs() || !archive_data())
-	{
-		printf("Error during compression to USB\n");
 		return 0;	
-	}
+	if(SHUTDOWN && !program_shutdown())
+		return 0;
 	bcm2835_close();
 	return 1;
 } 

@@ -26,14 +26,14 @@
 
 #define SGF_ENABLE 1  //Sigfox enabled
 #define LSM9DS0_MAG_ENABLE 0
-#define LSM9DS0_ENABLE 0
+#define LSM9DS0_ENABLE 1
 #define WLX2_ENABLE 1
+#define SHUTDOWN 0
 
-#define MSG_QUEUE_SIZE 100 // size of the message queue buffer for sigfox
 
 #define TEMPUSB "tempUSB/" //@ TODO: for debug purposes
 
-#define SGF_SEND_PERIOD 1800
+#define SGF_SEND_PERIOD 60
 
 
 typedef enum {WLX2_CH1,

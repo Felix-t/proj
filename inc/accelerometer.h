@@ -107,9 +107,9 @@
 
 /// Magnetic Field Strength: gauss range
 #define SCALE_MAG_2GAUSS  (scale_config) {(0.08F), 0b00000000};
-#define SCALE_MAG_4GAUSS  (scale_config) {(0.16F), 0b00100000};
-#define SCALE_MAG_8GAUSS  (scale_config) {(0.32F), 0b01000000};
-#define SCALE_MAG_12GAUSS (scale_config) {(0.48F), 0b01100000};
+#define SCALE_MAG_4GAUSS  (scale_config) {(0.16F), 0b00010000};
+#define SCALE_MAG_8GAUSS  (scale_config) {(0.32F), 0b00100000};
+#define SCALE_MAG_12GAUSS (scale_config) {(0.48F), 0b00110000};
 
 // Angular Rate: dps per L SB
 #define SCALE_GYR_245DPS  (scale_config) {(0.00875F), 0b00000000};
@@ -128,7 +128,10 @@
 #define UP_SCALE 		0.8
 #define DOWN_SCALE 		0.2
 
-#define QUEUE_SIZE 		200
+#define QUEUE_SIZE 		50 // number max of data not printed
+#define INTERVAL_CALC_SCALE 	10 //seconds
+
+#define SIZE_MAX_FILE 		5000
 
 enum {X, Y, Z};
 enum instrument {ACC,GYR,MAG};
@@ -140,7 +143,7 @@ typedef struct scale_cfg
 } scale_config;
 
 struct data_acq{
-	time_t acq_time;
+	struct timeval acq_time;
 	float **data;
 	uint16_t read_allowed;
 };
@@ -148,9 +151,15 @@ struct data_acq{
 struct acq_cleanup_args{
 	struct data_acq *buffer;
 	pthread_t *print_thread;
+	pthread_t *stats_thread;
+	int16_t **data_to_free;
 	_Atomic uint8_t *alive;
 };
 
+struct stats_struct{
+	struct data_acq *message_queue;
+	_Atomic uint8_t change_scale;
+};
 
 /* Function : This thread saves the data send by the LSM9DO in the file 
  * whose path is specified in config. When end_program is set, finishes 
@@ -175,7 +184,7 @@ void *acq_GYR_ACC(void * arg);
  * Params : data is x,y,z values of ACC,GYR,MAG. reset indicates when the 
  * 	values needs to be calculated
 */
-void stats(float **data, uint8_t reset);
+//static void stats(float **data);
 
 
 /* Function : Set the scale for the specified LSM9D0 instrument
@@ -185,14 +194,14 @@ void stats(float **data, uint8_t reset);
  * 	Possible choices in #define (ex SCALE_ACC...)
  * Return : 0 if instruments (@TODO : or scale) does not exist
  */
-uint8_t set_scale(enum instrument inst, scale_config new_scale);
+uint8_t set_scale(enum instrument inst, scale_config *new_scale);
 
 
 /* Function : Get the accelerometer, gyrometer and magnetometer data
  * Params : int16_t buffer[3][3] : [gyro/magn/acc] [x/y/z]
  * Return : error_code
 */
-uint8_t read_all(float *buffer[3]);
+uint8_t read_all(int16_t **buffer);
 
 
 /* Function : get the gyrometer data
@@ -201,7 +210,7 @@ uint8_t read_all(float *buffer[3]);
  * 	    -double scale : 0 or any SCALE_GYR_xxxxDPS : see p.13
  * Return : error_code
 */
-uint8_t read_gyrometer(float *buffer);
+uint8_t read_gyrometer(int16_t *buffer);
 
 
 /* Function : get the magnetometer data
@@ -210,7 +219,7 @@ uint8_t read_gyrometer(float *buffer);
  * 	    -double scale : 0 or any SCALE_MAG_xGAUSS : see p.13
  * Return : error_code
 */
-uint8_t read_magnetometer(float *buffer);
+uint8_t read_magnetometer(int16_t *buffer);
 
 
 /* Function : get the accelerometer data
@@ -219,7 +228,8 @@ uint8_t read_magnetometer(float *buffer);
  * 	    -double scale : 0 or any SCALE_ACC_xG : see p.13
  * Return : error_code
 */
-uint8_t read_accelerometer(float *buffer);
+uint8_t read_accelerometer(int16_t *buffer);
+uint8_t read_data(enum instrument inst, int16_t *buffer);
 
 
 /* Function : Configure the LSM9DS0 to start acquisition 
@@ -232,7 +242,7 @@ uint8_t setup_all();
  * 	See datasheet LSM9DS0 p41 42 for register configuration
  * Return : error_code
 */
-uint8_t setup_gyrometer();
+uint8_t setup_gyrometer(scale_config *scale);
 
 
 /* Function : configure the gyrometer for acquisition
@@ -240,13 +250,13 @@ uint8_t setup_gyrometer();
  * 	This function also enable temperature sensor
  * Return : error_code
 */
-uint8_t setup_magnetometer();
+uint8_t setup_magnetometer(scale_config *scale);
 
 
 /* Function : configure the gyrometer for acquisition
  * 	See datasheet LSM9DS0 p55 56 for register configuration
  * Return : error_code
 */
-uint8_t setup_accelerometer();
+uint8_t setup_accelerometer(scale_config *scale);
 
 #endif
