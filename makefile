@@ -8,7 +8,7 @@ BDIR=bin
 HDIR=inc
 
 LIBS=-lbcm2835 -pthread -lconfig -lm
-CFLAGS = -I$(HDIR) -D_MAIN_ 
+CFLAGS = -O0 -g -I$(HDIR) -D_MAIN_ 
 
 DEPS = $(wildcard $(HDIR)/*.h)
 

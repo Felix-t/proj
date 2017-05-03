@@ -259,8 +259,9 @@ static uint8_t get_scale(enum instrument inst, scale_config *scale)
 
 static void acq_cleanup(void *arg)
 {	
-	printf("LSM9DS0 cleanup routine");
+	printf("\tLSM9DS0 cleanup routine\n");
 	struct acq_cleanup_args *ptr = arg;
+	printf("data[0] cleanup : %i\n", ptr->data_to_free[0]);
 
 	pthread_join(*(ptr->print_thread), NULL);
 	pthread_join(*(ptr->stats_thread), NULL);
@@ -466,7 +467,7 @@ static void * stats(void * args)
 	pthread_t threads[2+LSM9DS0_MAG_ENABLE][3];
 
 	double sum[2+LSM9DS0_MAG_ENABLE][3];
-	double sum_square[2+LSM9DS0_MAG_ENABLE][3];
+	double sum_square[2+LSM9DS0_MAG_ENABLE][3] = {0};
 	double sum_total[2+LSM9DS0_MAG_ENABLE][3];
 	double sum_square_total[2+LSM9DS0_MAG_ENABLE][3];
 
@@ -488,12 +489,14 @@ static void * stats(void * args)
 	pthread_attr_init(&attr);
 	pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
 
+	sleep(1);
+
 	while(!end_program)
 	{
 		//Try to print at the same rate data is send by i2c
 		nanosleep(&tt, NULL);
 
-		if( message_queue[pos].read_allowed == 0)
+		if(message_queue[pos].read_allowed == 0)
 			continue;
 
 		count++;
@@ -591,11 +594,12 @@ void *acq_GYR_ACC(void * arg)
 	scale_config acc_scale = SCALE_ACC_4G;
 	uint8_t i, j, pos = 0;
 	uint8_t nb_acq = LSM9DS0_MAG_ENABLE ? 3 : 2; //3 if magnetometer is used
-	int16_t *data[nb_acq];
+	int16_t* data[nb_acq];
+
+	pthread_t print_thread, stats_thread;
 
 	struct data_acq message_queue[QUEUE_SIZE];
 
-	pthread_t print_thread, stats_thread;
 
 	// Allocate mem to buffer getting data from sensors :
 	// (x, y, z) = 3 for (ACC, GYR, (MAG))=2or3 containing a float
@@ -613,6 +617,7 @@ void *acq_GYR_ACC(void * arg)
 		for(j = 0; j < nb_acq; j++)
 			message_queue[i].data[j] = message_queue[0].data[0] 
 				+ (2*i+j)*3;
+		message_queue[i].read_allowed = 0;
 	}
 
 	/*  
@@ -623,8 +628,13 @@ void *acq_GYR_ACC(void * arg)
 */
 
 	data[0] = malloc(nb_acq*3*sizeof(int16_t));
-	for(i = 0; i < nb_acq; i++)
-		data[i] = data[0] + 3*i*sizeof(int16_t);
+	for(i = 1; i < nb_acq; i++)
+		data[i] = data[0] + 3*i;
+	printf("data[1][2] main : %i\n", &data[1][2]);
+	printf("data[0] main : %i\n", data[0]);
+	printf("&data[0][0] main : %i\n", &data[0][0]);
+	printf("data[1] main : %i\n", data[1]);
+	printf("&data[1][0] main : %i\n", &data[1][0]);
 
 	if(!bcm2835_i2c_begin())
 		pthread_exit((void *) 0);
@@ -696,17 +706,18 @@ static uint8_t open_new_file(FILE **fp)
 	if(*fp != NULL)
 		fclose(*fp);
 	static int file_count = 0;
-	const char *path_base = NULL;
-	static char *path = NULL;
-	if(path == NULL)
-		path = malloc(100);
+	static char *path_base = NULL;
+	char *path = malloc(100);
+	printf("a\n");
 
 	// Path specified in the config, add a suffixe to it
 	if(path_base == NULL)
 	{
+		path_base = malloc(100);
 		char *cfg = "PATH_LSM9DS0_DATA";
-		get_cfg_str(&path_base, &cfg, 1);
+		get_cfg(&path_base, &cfg, 1);
 	}
+	printf("2 : %s\n", path_base);
 
 	sprintf(path, "%s_%i", path_base, file_count++);
 	
@@ -717,6 +728,8 @@ static uint8_t open_new_file(FILE **fp)
 	}
 
 	printf("\tSaving accelerometer data to file : %s\n", path);
+
+	free(path);
 	return 1;
 }
 
@@ -749,6 +762,7 @@ void *print_to_file(void * arg)
 	open_new_file(&fp);
 	add_header(fp);
 
+	sleep(1);
 	while(!end_program)
 	{
 		if(ftell(fp) > SIZE_MAX_FILE*1024)

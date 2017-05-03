@@ -289,6 +289,8 @@ uint8_t archive_data()
 		}
 	}
 
+	closedir(FD);
+
 	strcat(dir_name, file_name);
 	printf("Trying to compress to %s...\n", dir_name);
 	get_cfg(&usb_size, cfg_name, 1);

@@ -36,25 +36,30 @@ void get_cfg_double(double *values, char **str, int32_t str_nb)
 		config_lookup_float(&config, str[i], &values[i]);
 
 	}
+	config_destroy(&config);
 }
 
 /* Function :
  * Params :
  * Return :
 */
-void get_cfg_str(const char **values, char **str, int32_t str_nb)
+void get_cfg_str(char **values, char **str, int32_t str_nb)
 {
 	int32_t i;
 	config_t config;
 	config_setting_t *setting_root;
+	const char *tmp_str[str_nb];
 
 	init_cfg(&config, &setting_root);
 
 	for(i = 0; i<str_nb; i++)
 	{
-		config_lookup_string(&config, str[i], values);
-
+		config_lookup_string(&config, str[i], &tmp_str[i]);
+		strcpy(values[i], tmp_str[i]);
 	}
+	printf("%s\n", values[0]);
+
+	config_destroy(&config);
 }
 /* Function :
  * Params :
@@ -74,6 +79,7 @@ void set_cfg(char **str, double *values, int32_t str_nb)
 		config_setting_set_float(path, values[i]);
 	}	
 	config_write_file(&config, CFG_FILE);
+	config_destroy(&config);
 }
 /*
 int main()

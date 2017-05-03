@@ -33,7 +33,7 @@
 
 #define TEMPUSB "tempUSB/" //@ TODO: for debug purposes
 
-#define SGF_SEND_PERIOD 60
+#define SGF_SEND_PERIOD 600
 
 
 typedef enum {WLX2_CH1,
