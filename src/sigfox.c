@@ -92,8 +92,11 @@ void * send_sigfox(void *args)
 			write = 0;
 		}
 		pthread_mutex_unlock(&sgf_msg.mutex);
+		printf("loop :  %li\n",
+			syscall(__NR_gettid));
 		sleep(2);
 	}
+	printf("Thread send data exited");
 	pthread_exit(0);
 }
 
@@ -112,14 +115,15 @@ static time_t get_ref_time()
 
 void *sigfox(void* args)
 {
-	char *portname = "/dev/ttyUSB0";
-	
 	printf("Thread sigfox created, id : %li\n",
 			syscall(__NR_gettid));
 
+	char *portname = "/dev/ttyUSB0";
+
+	time_t last_msg = time(NULL);
 	int i, pos_in = 0, pos_out = 0;
 	uint32_t t;
-	uint8_t *messages[MAX_NB_MSG];
+	uint8_t *messages[MAX_NB_MSG + 1];
 
 	time_t ref_time = get_ref_time();
 
@@ -152,7 +156,9 @@ void *sigfox(void* args)
 
 	sgf_msg.write_allowed = 1;
 
-	while(!end_program || pos_in != pos_out)
+	//Stop the loop if end_program is 1, or if too many messages have been
+	// sent through sigfox
+	while(!end_program && pos_in < MAX_NB_MSG)
 	{
 		for(i = 0; i < 12; i++)
 			messages[pos_in][i] = 0;
@@ -166,29 +172,42 @@ void *sigfox(void* args)
 			t = (uint32_t) difftime(sgf_msg.time, ref_time);
 
 			//Build message min/max
-			pos_in += build_message(messages[pos_in], t, sgf_msg.min, 
-					sgf_msg.max, alive, sgf_msg.id, 0);
+			pos_in += build_message(messages[pos_in], t, 
+					sgf_msg.min, sgf_msg.max, 
+					alive, sgf_msg.id, 0);
 			
 			//Build message mean/standard dev
-			pos_in += build_message(messages[pos_in], t, sgf_msg.mean, 
-					sgf_msg.std_dev, alive, sgf_msg.id, 1);
+			pos_in += build_message(messages[pos_in], t,
+					sgf_msg.mean, sgf_msg.std_dev,
+					alive, sgf_msg.id, 1);
 			sgf_msg.write_allowed = 1;
 		}
 		pthread_mutex_unlock(&sgf_msg.mutex);
 
 		//@TODO : remplacer par envoi sigfox
-		if(pos_out < pos_in)
+		if(pos_out < pos_in && 
+				difftime(time(NULL), last_msg) > SGF_INTERVAL)
 		{
 			for (i = 0; i < 12; i++)
 				fprintf(fp, "%hhx ", messages[pos_out][i]);
 			fprintf(fp, "\n");
 			write(fd, messages[pos_out], 12);
-			sleep(SGF_INTERVAL);
 			pos_out++;
 			fflush(fp);
+			last_msg = time(NULL);
+			printf("--> Message sigfox sent\n");
 		}
 		sleep(1);
 	}
+
+	//If messages > 140, allow the send_sigfox thread to exit by setting 
+	// the shared variable to 1 continuously
+	while(!end_program)
+	{
+		sgf_msg.write_allowed = 1;
+		sleep(1);
+	}
+
 	fclose(fp);
 	free(messages[0]);
 	pthread_exit((void *) 1);

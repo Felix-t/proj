@@ -128,7 +128,7 @@ static uint8_t check_battery(int32_t volt)
 {
 	static double value[NB_CFG_BATTERY] = {0,0,0,0,0};
 	static int32_t start_volt = 0;
-	static time_t start_time = NULL;
+	static time_t start_time = 0;
 	static double treshold;
 
 	if(start_volt == 0)
@@ -146,7 +146,7 @@ static uint8_t check_battery(int32_t volt)
 		//Order of string here should be same order as in cfg.h enum
 		char *str[NB_CFG_BATTERY] = {"MAX_VOLT", "MIN_VOLT",
 			"THRESHOLD", "LAST_DISCHARGE","ACQ_TIME"};
-		get_cfg(value, str,  NB_CFG_BATTERY);
+		get_cfg((double *) value, str,  NB_CFG_BATTERY);
 		
 		// Uncomment to have duration of acquisition dependent on 
 		// last acquisition :

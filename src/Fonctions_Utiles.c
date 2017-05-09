@@ -10,7 +10,7 @@
 void Zero_str(char *str)
 {
 
-	memset(str,0,sizeof(str));
+	memset(str,0,strlen(str));
 
 }
 

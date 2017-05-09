@@ -147,9 +147,33 @@ uint8_t program_shutdown()
 
 uint8_t move_logs()
 {
+	if(system("journalctl -u acq_surffeol > /home/pi/projet/logs/out") == -1)
+	{
+		printf("Error saving program output\n");
+		return 0;
+	} 
+		
 	pid_t pid = fork();
 	if (pid == 0) { /* child */
-		execl("/bin/mv", "/bin/mv", "/home/pi/projet/logs/*", "Data/logs/", (char *) 0);
+		execl("/bin/mv", "/bin/mv", "/home/pi/projet/logs/", "Data/", (char *) 0);
+		exit(0);
+	}
+	else if (pid < 0) {
+		printf(" error - couldn't start process");
+		return 0;
+	}
+	else {
+		sleep(TIMEOUT);
+		pid_t ws = waitpid( pid, NULL,0);
+		if (ws == -1)
+		{
+			printf("Error during mv logs Data/");
+			return 0;
+		}
+	}
+	pid = fork();
+	if (pid == 0) { /* child */
+		execl("/bin/mkdir", "/bin/mkdir", "/home/pi/projet/logs/", (char *) 0);
 		exit(0);
 	}
 	else if (pid < 0) {
@@ -165,17 +189,29 @@ uint8_t move_logs()
 			return 0;
 		}
 	}
-	
-	if(system("journalctl -u acq_surffeol > /home/pi/projet/logs/out") != -1)
-		return 1;
-	else 
-		printf("Error during temperature monitoring\n");
-	return 0;
+	return 1;
 }
 
 uint8_t start_dhcp_server()
 {
 	pid_t pid = fork();
+
+	if(pid == 0)
+	{
+		execl("/bin/cp", "/bin/cp", "interfaces_acq", "/etc/network/interfaces", (char *) 0);
+		exit(0);
+	}
+	else {
+		sleep(TIMEOUT);
+		pid_t ws = waitpid( pid, NULL,0);
+		if (ws == -1)
+		{
+			printf("Error during interface copy");
+			return 0;
+		}
+	}
+	
+	pid = fork();
 	if (pid == 0) { /* child */
 		execl("/etc/init.d/dhcpcd", "/etc/init.d/dhcpcd", "stop",(char *) 0);
 		exit(0);
@@ -266,7 +302,7 @@ uint8_t archive_data()
 
 	//Add time to the name of the file
 	time_t t = time(NULL);
-	int month = localtime(&t)->tm_mon;
+	int month = localtime(&t)->tm_mon + 1;
 	int year = localtime(&t)->tm_year - 100;
 	int day = localtime(&t)->tm_mday;
 	sprintf(file_name, "%i_%i_%i_data.tar.lrz", day, month, year);
@@ -294,7 +330,7 @@ uint8_t archive_data()
 	strcat(dir_name, file_name);
 	printf("Trying to compress to %s...\n", dir_name);
 	get_cfg(&usb_size, cfg_name, 1);
-	if (Calcul_free_space(TEMPUSB, 1) < (1048756.0*usb_size*0.03))
+	if (Calcul_free_space(TEMPUSB, 0) < (1048756.0*usb_size*0.03))
 	{
 		printf("Not enough space\n");
 		return 0;
@@ -303,7 +339,6 @@ uint8_t archive_data()
 		return 0;
 	if(!delete_data(TEMPUSB))
 		return 0;
-	printf("Done\n");
 	return 1;
 }
 
@@ -312,7 +347,7 @@ static uint8_t delete_data(char * path)
 {
 	pid_t pid = fork();
 	if (pid == 0) { /* child */
-		execl("/bin/rm", "/bin/rm", "-r", "Data/Data/*", "Data/save", (char *)0); //@TODO : remplacer Data/ par const ou config
+		execl("/bin/rm", "/bin/rm", "-r", "Data/Data", "Data/logs", "Data/LSM9DS0", (char *)0); //@TODO : remplacer Data/ par const ou config
 		exit(0);
 	}
 	else if (pid < 0) {

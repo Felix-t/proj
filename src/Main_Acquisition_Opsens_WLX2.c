@@ -206,7 +206,6 @@ void * acq_WLX2(void * args)
 	struct config_all pconfig_all;
 	struct shared pshared;
 	pthread_mutex_t mut=PTHREAD_MUTEX_INITIALIZER;
-	printf("At init, %i\n", &mut);
 	struct param_pgm pparam_pgm;
 
 	//Kill_old_process_Pgm_Opsens("Programme_Acquisition_Opsens_WLX2");

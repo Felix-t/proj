@@ -8,8 +8,7 @@ BDIR=bin
 HDIR=inc
 
 LIBS=-lbcm2835 -pthread -lconfig -lm
-CFLAGS = -O0 -g -I$(HDIR) -D_MAIN_ 
-
+CFLAGS = -g -I$(HDIR) -D_MAIN_ -Wall
 DEPS = $(wildcard $(HDIR)/*.h)
 
 OBJ = $(patsubst $(SDIR)/%.c,$(ODIR)/%.o,$(SRC))
@@ -18,7 +17,7 @@ OBJS = $(wildcard $(ODIR)/*.o)
 SRC = $(wildcard $(SDIR)/*.c)
 
 $(BDIR)/acq_surffeol: $(OBJS) $(OBJ)
-	gcc -o $@ $(ODIR)/*.o $(LIBS)
+	$(CC) -o $@ $(ODIR)/*.o $(LIBS) $(CFLAGS)
 
 $(ODIR)/%.o: $(SDIR)/%.c $(HDIR)/%.h
 	$(CC) -c -o $@ $< $(CFLAGS)
@@ -46,4 +45,4 @@ clean:
 #cd Interrogateur_Opsens/ && make clean
 
 clean_data:
-	rm -rf Data/Data/* tempUSB/* logs/* Data/save
+	rm -rf Data/* tempUSB/* logs/*

@@ -3,7 +3,7 @@
 
 #define SIZE_SIGFOX_MSG 12 // bytes
 #define MAX_NB_MSG 140 //daily max number of messages that can be sent with sgf
-#define SGF_INTERVAL 60 //In seconds, interval between two sets of data sent 
+#define SGF_INTERVAL 600 //In seconds, interval between two sets of data sent 
 			 // through sigfox
 
 #define TTY "/dev/ttyUSB0"

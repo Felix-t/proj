@@ -393,7 +393,7 @@ int Reception_answer_2(struct parametres_connexion *param_connection,  struct pu
 	timeout.tv_sec=TIMEOUT_S;
 	timeout.tv_usec=TIMEOUT_MS*1000;
 
-	if(select(sizeof(struct public_response_scpi), &select_fds, NULL, NULL, &timeout) == 0)
+	if(select(param_connection->ID_socket_command + 1, &select_fds, NULL, NULL, &timeout) == 0)
 	{
 
 		ok=0;
@@ -510,15 +510,17 @@ int Send_command_and_receive_answer_2(struct parametres_connexion *param_connect
 	pthread_t xthread_Send_command;
 	pthread_t xthread_Receive_answer;
 
-	struct struct_SC_RA param_SC_RA;
+	struct struct_SC_RA param_SC_RA={
+		.answer[0] ="",
+		.answer[1] = "",
+		.nb_answer=nb_answer,
+		.ok_print=ok_print,
+		.ok_command=0,
+		.ok_answer=0,
+		.command=command,
+		.param_connection=param_connection
+	};
 
-	param_SC_RA.nb_answer=nb_answer;
-	param_SC_RA.ok_print=ok_print;
-	param_SC_RA.ok_command=0;
-	param_SC_RA.ok_answer=0;
-	Zero_str(param_SC_RA.answer[0]);Zero_str(param_SC_RA.answer[1]);
-	param_SC_RA.command=command;
-	param_SC_RA.param_connection=param_connection;
 
 // 	if (!pthread_create(&xthread_Send_command, NULL, thread_Send_command, &param_SC_RA)
 // 		&& !pthread_create (&xthread_Receive_answer, NULL, thread_Receive_answer, &param_SC_RA) 
@@ -567,7 +569,8 @@ int Send_command_and_receive_answer_2(struct parametres_connexion *param_connect
 	{
 		//memcpy(answer[0],param_SC_RA.answer[0],strlen(param_SC_RA.answer[0])*sizeof(char));
 		//memcpy(answer[1],param_SC_RA.answer[1],strlen(param_SC_RA.answer[1])*sizeof(char));
-		strcat(answer[0],param_SC_RA.answer[0]);strcat(answer[1],param_SC_RA.answer[1]);
+		strcat(answer[0],param_SC_RA.answer[0]);
+		strcat(answer[1],param_SC_RA.answer[1]);
 		//printf("answer[0],answer[1] %s %s\n",answer[0],answer[1]);
 		//printf("param_SC_RA.answer[0],param_SC_RA.answer[1] %s %s\n",param_SC_RA.answer[0],param_SC_RA.answer[1]);
 	}
@@ -666,7 +669,7 @@ void* thread_Receive_answer (void* arg)
 			pthread_cond_signal(&condition_Send_command_and_Receive_answer);
 			pthread_mutex_unlock(&mutex_Send_command_and_Receive_answer);
 		}
-		sleep(0.1);
+		//sleep(0.1); // = sleep(0)
 		ok_reception_answer=Reception_answer_2(param_SC_RA->param_connection,&ans,param_SC_RA->ok_print);
 
 		//printf("ok_reception_answer %d\n",ok_reception_answer);
@@ -882,8 +885,8 @@ int Test_connexion(struct parametres_connexion *param_connection, int ok_print)
 		strcat(answer_attendu_by_channel[1], "-02");
 	}
 	//struct public_response_scpi answer;
-	char answer[_RECEIVE_BUFF_SIZE];
-	char answer_2[2][_RECEIVE_BUFF_SIZE];
+	char answer[_RECEIVE_BUFF_SIZE] = {0};
+	char answer_2[2][_RECEIVE_BUFF_SIZE] = {{0}};
 
 	printf("\t%s\n","->Test de la connexion:");
 	printf("\t\t%s %s\n\t\t","Envoi de la commande: ",command);
@@ -928,6 +931,7 @@ int Test_connexion(struct parametres_connexion *param_connection, int ok_print)
 
 
 
+
 /********************************************************/
 /*Find_channel_in_Received_command                      */
 /*                                                      */
@@ -940,7 +944,7 @@ int Find_channel_in_Received_command (char *str, char *substr)
 	ret=strstr(str,substr);
 	if (ret!=NULL)
 	{
-		temp_str=malloc((strlen(ret)-1)*sizeof(char));
+		temp_str=malloc((strlen(ret))*sizeof(char));
 
 		for(i=1;i<strlen(ret);i++)
 		{

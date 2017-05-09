@@ -342,7 +342,7 @@ int Get_sensors_list(struct parametres_connexion *param_connection, char *answer
 
 	if (ok)
 	{
-		if(Verification_response_from_device_is_err(answer_2[0])==0);
+		if(Verification_response_from_device_is_err(answer_2[0])==0)
 		{
 			ok=0;
 		}

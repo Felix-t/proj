@@ -125,13 +125,13 @@
 //setup in the hardware
 #define INPUT_DATA_RATE		50 //Hz	
 
-#define UP_SCALE 		0.8
-#define DOWN_SCALE 		0.2
+#define UP_SCALE 		0.90
+#define DOWN_SCALE 		0.05 //useless
 
 #define QUEUE_SIZE 		50 // number max of data not printed
 #define INTERVAL_CALC_SCALE 	10 //seconds
 
-#define SIZE_MAX_FILE 		5000
+#define SIZE_MAX_FILE 		500
 
 enum {X, Y, Z};
 enum instrument {ACC,GYR,MAG};
@@ -149,9 +149,9 @@ struct data_acq{
 };
 
 struct acq_cleanup_args{
-	struct data_acq *buffer;
 	pthread_t *print_thread;
 	pthread_t *stats_thread;
+	struct data_acq *buffer;
 	int16_t **data_to_free;
 	_Atomic uint8_t *alive;
 };

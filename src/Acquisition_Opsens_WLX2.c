@@ -852,7 +852,7 @@ static void stats(struct stUDPSendMeasureType_t *ch1,
 					(void*) &data_to_send[i]);
 			sum[i] = 0;
 			sum_square[i] = 0;
-			printf("Ch1  --  Moy : %f\t Ecarts : %f\n", data_to_send[i].mean,
+			printf("Ch%i  --  Moy : %f\t Ecarts : %f\n", i, data_to_send[i].mean,
 					data_to_send[i].std_dev);
 		}
 

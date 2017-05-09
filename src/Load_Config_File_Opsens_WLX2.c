@@ -215,7 +215,7 @@ int Load_config_file(struct config_all *pconfig, char **module_idn)
 	if(!(setting = config_setting_get_member(root, "module_IDN")))
 		return 0;
 	tmp_str = config_setting_get_string(setting);
-	*module_idn = malloc(sizeof(char)*strlen(tmp_str) + 1);
+	*module_idn = malloc(100);
 	strcpy(*module_idn, tmp_str);
 	
 	if(!(setting = config_setting_get_member(root, "zeros")))

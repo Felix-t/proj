@@ -112,11 +112,11 @@ static void *test()
 		.mean = 5};
 
 	pthread_create(&thread, &attr, send_sigfox, (void *) &data_to_send);
-	for(i = 0; i < 1;i++)
+	for(i = 0; i < 100;i++)
 	{	
 		get_cpu_usage();
 		get_temp();
-		sleep(30);
+		sleep(1800);
 	}
 
 	end_program = 1;
@@ -126,6 +126,7 @@ static void *test()
 
 int  main()
 {	
+	sleep(10);
 	uint8_t i = 0;
 	uint8_t nb_threads = SGF_ENABLE + LSM9DS0_ENABLE + WLX2_ENABLE +1;
 	pthread_t *threads = malloc(nb_threads*sizeof(pthread_t));

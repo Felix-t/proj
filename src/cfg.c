@@ -57,7 +57,6 @@ void get_cfg_str(char **values, char **str, int32_t str_nb)
 		config_lookup_string(&config, str[i], &tmp_str[i]);
 		strcpy(values[i], tmp_str[i]);
 	}
-	printf("%s\n", values[0]);
 
 	config_destroy(&config);
 }
