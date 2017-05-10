@@ -6,79 +6,43 @@
 #include <errno.h>
 #include <string.h>
 #include <unistd.h>
-
-static uint8_t set_interface_attribs (int fd, int speed, int parity)
-{
-        struct termios tty;
-        memset (&tty, 0, sizeof tty);
-        if (tcgetattr (fd, &tty) != 0)
-        {
-                printf("error %d from tcgetattr", errno);
-                return -1;
-        }
-
-        cfsetospeed (&tty, speed);
-        cfsetispeed (&tty, speed);
-
-        tty.c_cflag = (tty.c_cflag & ~CSIZE) | CS8;     // 8-bit chars
-        // disable IGNBRK for mismatched speed tests; otherwise receive break
-        // as \000 chars
-        tty.c_iflag &= ~IGNBRK;         // disable break processing
-        tty.c_lflag = 0;                // no signaling chars, no echo,
-                                        // no canonical processing
-        tty.c_oflag = 0;                // no remapping, no delays
-        tty.c_cc[VMIN]  = 0;            // read doesn't block
-        tty.c_cc[VTIME] = 5;            // 0.5 seconds read timeout
-
-        tty.c_iflag &= ~(IXON | IXOFF | IXANY); // shut off xon/xoff ctrl
-
-        tty.c_cflag |= (CLOCAL | CREAD);// ignore modem controls,
-                                        // enable reading
-        tty.c_cflag &= ~(PARENB | PARODD);      // shut off parity
-        tty.c_cflag |= parity;
-        tty.c_cflag &= ~CSTOPB;
-        tty.c_cflag &= ~CRTSCTS;
-
-        if (tcsetattr (fd, TCSANOW, &tty) != 0)
-        {
-                printf("error %d from tcsetattr", errno);
-                return 0;
-        }
-        return 1;
-}
-
-static uint8_t set_blocking (int fd, int should_block)
-{
-        struct termios tty;
-        memset (&tty, 0, sizeof tty);
-        if (tcgetattr (fd, &tty) != 0)
-        {
-                printf("error %d from tggetattr", errno);
-                return 0;
-        }
-
-        tty.c_cc[VMIN]  = should_block ? 1 : 0;
-        tty.c_cc[VTIME] = 5;            // 0.5 seconds read timeout
-
-        if (tcsetattr (fd, TCSANOW, &tty) != 0)
-		printf("error %d setting term attributes", errno);
-	return 1;
-}
+#include "arm.h"
 
 
 int main()
 {
-	uint8_t messages[12] = {'A','T','Q'};
-	char *portname = "/dev/ttyUSB0";
-	int fd = open (portname, O_RDWR | O_NOCTTY | O_SYNC);
-	if (fd < 0)
-	{
-		printf("error %d opening %s: %s", errno, portname, strerror (errno));
-		return 0;
-	}
-	set_interface_attribs (fd, B19200, 0);  // set speed to 115,200 bps, 8n1 (no parity)
-	set_blocking (fd, 1);                // set no blocking
+	arm_t myArm;
+	armType_t armType;
+	armError_t err = ARM_ERR_NONE;
+	uint8_t rev[16] = "";
+	uint64_t sn = 0;
+	uint16_t rfFreq = 0;
+	uint8_t rfPower = 0;
+	
+	//Init armapi
+	err=armInit(&myArm, "/dev/ttyUSB0");
 
-	write(fd, "ATQ\n", 4);
-	return 1;
+	err=armInfo(&myArm, &armType, rev, &sn, &rfFreq, &rfPower);
+
+	//Print information
+	switch(armType)
+	{
+		case ARM_TYPE_N8_LP:
+		printf("ARM_TYPE_N8_LP Detected.\n");
+		break;
+		
+		case ARM_TYPE_N8_LD:
+		printf("ARM_TYPE_N8_LD Detected.\n");
+		break;
+		
+		case ARM_TYPE_N8_LW:
+		printf("ARM_TYPE_N8_LW Detected.\n");
+		break;
+		
+		default:
+		printf("No arm type detected.\n");
+		break;
+	}	
+	err=armDeInit(&myArm);
+
 }

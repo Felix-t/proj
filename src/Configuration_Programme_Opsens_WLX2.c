@@ -67,7 +67,7 @@ void Print_Init_struct_config_save_file(struct config_save_file *pconfig_save_fi
 /********************************************************/
 void Init_struct_config_meas(struct config_meas *pconfig_meas, int *select_ch, int (*GFx_jauge_ch)[4], char *numero_jauge_ch[NB_CH], char *type_jauge_ch[NB_CH])
 {
-	int i,j;
+	int i = 0,j = 0;
 
 	select_ch=malloc(NB_CH*sizeof(int));
 	GFx_jauge_ch=malloc(NB_CH*sizeof(*GFx_jauge_ch));

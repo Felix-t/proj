@@ -102,8 +102,8 @@ void Print_Entete_file_Enregistrement_data(struct param_pgm *param )
 {
 
 	int i;
-	char GF0[10],GF1[10],GF2[10],GF3[10];
-	char GF[100], type_jauge[100]={'\0'},numero_jauge[100]={'\0'};
+	char GF0[10]={'\0'},GF1[10]={'\0'},GF2[10]={'\0'},GF3[10]={'\0'};
+	char GF[100]={'\0'}, type_jauge[100]={'\0'},numero_jauge[100]={'\0'};
 	FILE *fp;
 
 	fp=param->pshared->fp;

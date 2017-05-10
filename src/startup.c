@@ -112,11 +112,11 @@ static void *test()
 		.mean = 5};
 
 	pthread_create(&thread, &attr, send_sigfox, (void *) &data_to_send);
-	for(i = 0; i < 100;i++)
+	for(i = 0; i < 2;i++)
 	{	
 		get_cpu_usage();
 		get_temp();
-		sleep(1800);
+		sleep(60);
 	}
 
 	end_program = 1;

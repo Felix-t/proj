@@ -248,9 +248,9 @@ static void acq_cleanup(void *arg)
 
 	pthread_join(*(ptr->print_thread), NULL);
 	pthread_join(*(ptr->stats_thread), NULL);
-	free(ptr->data_to_free[0]);
-	free(ptr->buffer[0].data[0]);
-	free(ptr->buffer[0].data);
+	//free(ptr->data_to_free[0]);
+	//free(ptr->buffer[0].data[0]);
+	//free(ptr->buffer[0].data);
 	*(ptr->alive) = 0;	
 }
 
@@ -517,7 +517,6 @@ static void * stats(void * args)
 		//   -Send data to sigfox
 		if (count%(INPUT_DATA_RATE*INTERVAL_CALC_SCALE) == 0)
 		{
-			printf("\n\t Change scale\n");
 			for(i = 0; i < 3; i++)
 			{
 				mean[ACC][i] = calc_mean(sum[ACC][i],
@@ -541,7 +540,6 @@ static void * stats(void * args)
 			//Send these values to sigfox
 			if(difftime(time(NULL), new_cycle) > SGF_SEND_PERIOD)
 			{
-				printf("\n\tStats send sgf\n");
 				for(i = 0; i < 2 + LSM9DS0_MAG_ENABLE; i++)
 				{
 					for(j = 0; j < 3; j++)
@@ -566,13 +564,15 @@ static void * stats(void * args)
 								(void*) &tab_data[i][j]);
 					}
 				}
-				//send to sigfox
+				printf("\n\tSent LSM9DS0 stats\n");
+
 				new_cycle = time(NULL);
 				count = 0;
 			}
 		}
 		pos = (pos + 1) % QUEUE_SIZE;
 	}
+
 	pthread_attr_destroy(&attr);
 	sleep(1); // Wait before delete tab_data if a thread send_sigfox still needs it
 	pthread_exit((void *) 1);
@@ -650,7 +650,7 @@ void *acq_GYR_ACC(void * arg)
 
 	struct stats_struct stats_args = {
 		.message_queue = message_queue,
-		.change_scale = 0
+		.change_scale = scale
 	};
 
 	printf("Mark 2");
@@ -683,11 +683,9 @@ void *acq_GYR_ACC(void * arg)
 		if (stats_args.change_scale != scale)
 		{
 			scale = stats_args.change_scale;
-			printf("\n\tChange scale in main loop : new scale : %i\n", scale);
+			printf("\n\tChanged accelerometer scale to : %ig\n", scale == 5 ? 16 : scale*2);
 			acc_scale.reg_config = (scale - 1) << 3;
-			acc_scale.value = 0.061 * scale;
-			if(scale == 5)
-				acc_scale.value = 0.488;
+			acc_scale.value = scale == 5 ? 0.488 : 0.061 * scale;
 			setup_accelerometer(&acc_scale);
 			get_float_data(data, message_queue[pos].data, scale);
 			nanosleep(&tt, NULL);

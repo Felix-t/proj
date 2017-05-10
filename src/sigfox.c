@@ -217,7 +217,7 @@ void *sigfox(void* args)
 static uint8_t build_message(uint8_t msg[12], uint32_t t, float val1, float val2, 
 		_Atomic uint8_t *alive, identity id, uint8_t msg_type)
 {
-	uint8_t tmp, i;
+	//uint8_t tmp, i;
 	static uint8_t power = 0;
 
 	// We need to save the battery info to embed it into the other messages
