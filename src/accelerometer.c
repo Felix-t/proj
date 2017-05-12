@@ -23,7 +23,6 @@ static void acq_cleanup(void *arg);
 static uint8_t change_acc_scale(double *mean, double *std_dev);
 static inline float calc_mean(double sum, int nb);
 static inline float calc_std_dev(double sum, int nb, float mean);
-static void * stats(void * args);
 static uint8_t get_float_data(int16_t **data, float **buffer, uint8_t new_scale);
 static uint8_t add_header(FILE *fp);
 static uint8_t open_new_file(FILE **fp);
@@ -207,8 +206,12 @@ static uint8_t readReg(uint8_t device_address, uint8_t reg, uint8_t *value, size
 }
 
 
-/* Function : Initialize and return a pointer indicating current scales
- * Return : array of scale_config[ACC/GYR/MAG]
+/* Function : Query the LSM9DS0 to get the current scales of the ACC/GYR/MAG
+ * Params : 
+ * 	- inst is one of ACC/GYR/MAG
+ * 	- scale is filled by this function with the LSM9DS0 scale for the inst
+ * Return : 
+ * 	- 0 if an error while reading the registers occured, 1 otherwise
  */
 static uint8_t get_scale(enum instrument inst, scale_config *scale)
 {
@@ -241,6 +244,9 @@ static uint8_t get_scale(enum instrument inst, scale_config *scale)
 }
 
 
+/* Function : Called when acq_GYR_ACC() thread terminates
+ * Params : Struct acq_cleanup_args containing mallocs to free & thread to join
+ */
 static void acq_cleanup(void *arg)
 {	
 	printf("\tLSM9DS0 cleanup routine\n");
@@ -248,24 +254,11 @@ static void acq_cleanup(void *arg)
 
 	pthread_join(*(ptr->print_thread), NULL);
 	pthread_join(*(ptr->stats_thread), NULL);
-	//free(ptr->data_to_free[0]);
-	//free(ptr->buffer[0].data[0]);
-	//free(ptr->buffer[0].data);
+	free(ptr->data_to_free[0]);
+	free(ptr->buffer[0].data[0]);
+	free(ptr->buffer[0].data);
 	*(ptr->alive) = 0;	
 }
-
-
-static inline float calc_mean(double sum, int nb)
-{
-	return sum/nb;
-}
-
-
-static inline float calc_std_dev(double sum, int nb, float mean)
-{
-	return sqrt(sum/nb-mean*mean);
-}
-
 
 uint8_t set_scale(enum instrument inst, scale_config *new_scale)
 {
@@ -273,13 +266,16 @@ uint8_t set_scale(enum instrument inst, scale_config *new_scale)
 		return 0;
 	switch(inst){
 		case ACC:
-			writeReg(ACC_ADDRESS, CTRL_REG2_XM, &new_scale->reg_config, 1);
+			return writeReg(ACC_ADDRESS, CTRL_REG2_XM,
+				       	&new_scale->reg_config, 1);
 			break;
 		case GYR:
-			writeReg(GYR_ADDRESS, CTRL_REG4_G, &new_scale->reg_config, 1);
+			return writeReg(GYR_ADDRESS, CTRL_REG4_G,
+				       	&new_scale->reg_config, 1);
 			break;
 		case MAG:
-			writeReg(MAG_ADDRESS, CTRL_REG6_XM, &new_scale->reg_config, 1);
+			return writeReg(MAG_ADDRESS, CTRL_REG6_XM,
+				       	&new_scale->reg_config, 1);
 			break;
 	};
 	return 1;
@@ -288,34 +284,31 @@ uint8_t set_scale(enum instrument inst, scale_config *new_scale)
 
 uint8_t read_all(int16_t **buffer)
 {
-	//printf("1\n");
 	if (!read_data(ACC, buffer[ACC]))
 	{
 		printf("Accelerometer read error\n");
 		return 0;
 	}
-	//printf("2\n");
 	if (!read_data(GYR, buffer[GYR]))
 	{
 		printf("Gyrometer read error\n");
 		return 0;
 	}
-	//printf("3\n");
 	if (LSM9DS0_MAG_ENABLE && !read_data(MAG, buffer[MAG]))
 	{
 		printf("Magnetometer read error\n");
 		return 0;
 	}
-	//printf("4\n");
-
 	return 1;
 }
+
 
 static inline int16_t convert_reg_to_int16(uint8_t reg1, uint8_t reg2)
 {
 	int16_t res = (reg1 | (reg2 << 8));
 	return res;
 }
+
 
 uint8_t read_data(enum instrument inst, int16_t *buffer)
 {
@@ -369,7 +362,6 @@ uint8_t setup_all()
 		printf("Magnetometer initialization error\n");
 		return 0;
 	}
-
 	return 1;
 }
 
@@ -441,60 +433,68 @@ uint8_t setup_magnetometer(scale_config *scale)
 }
 
 
-static void * stats(void * args)
+static inline float calc_mean(double sum, int nb)
 {
-	sleep(1);
+	return sum/nb;
+}
+
+
+static inline float calc_std_dev(double sum, int nb, float mean)
+{
+	return sqrt(sum/nb-mean*mean);
+}
+
+
+void * stats(void * arg)
+{
 	printf("Thread stats lsm9ds0 created id : %li\n", syscall(__NR_gettid));
-
-	int32_t i = 0, j = 0, pos = 0;
-
-	struct stats_struct *stats_args = (struct stats_struct*) args;
-
-	_Atomic uint8_t *new_scale = &stats_args->change_scale;
-	struct data_acq *message_queue = stats_args->message_queue;
-
-	struct sgf_data tab_data[2+LSM9DS0_MAG_ENABLE][3];
-	pthread_t threads[6 + 3*LSM9DS0_MAG_ENABLE];
-
-	double sum[2+LSM9DS0_MAG_ENABLE][3] = {{0}, {0}};
-	double sum_square[2+LSM9DS0_MAG_ENABLE][3] = {{0}, {0}};
-	double sum_total[2+LSM9DS0_MAG_ENABLE][3] = {{0}, {0}};
-	double sum_square_total[2+LSM9DS0_MAG_ENABLE][3] = {{0}, {0}};
-
-	double min[2+LSM9DS0_MAG_ENABLE][3] = {{0}, {0}};
-	double max[2+LSM9DS0_MAG_ENABLE][3] = {{0}, {0}};
-	double mean[2+LSM9DS0_MAG_ENABLE][3] = {{0}, {0}};
-	double std_dev[2+LSM9DS0_MAG_ENABLE][3] = {{0}, {0}};
-
-	printf("Mark 7");
-	for(i = 0;i<6+LSM9DS0_MAG_ENABLE*3;i++)
-		min[i/3][i%3] = 16000.0;
-	uint32_t count = 0;
-	time_t new_cycle = time(NULL);
 
 	struct timespec tt = {
 		.tv_sec = 0,
 		.tv_nsec = (long) 18000000.0
 	};
 
-	pthread_attr_t attr;
+	struct stats_struct *stats_args = (struct stats_struct*) arg;
+	_Atomic uint8_t *new_scale = &stats_args->change_scale;
+	struct data_acq *message_queue = stats_args->message_queue;
 
+
+	int32_t i, j, pos = 0;
+	uint32_t count = 0;
+
+	time_t new_cycle = time(NULL);
+
+	struct sgf_data tab_data[2+LSM9DS0_MAG_ENABLE][3];
+	pthread_t threads[6 + 3*LSM9DS0_MAG_ENABLE];
+
+	double sum[2+LSM9DS0_MAG_ENABLE][3] = {{0}, {0}};
+	double sum_square[2+LSM9DS0_MAG_ENABLE][3] = {{0}, {0}};
+	double sum_sgf[2+LSM9DS0_MAG_ENABLE][3] = {{0}, {0}};
+	double sum_square_sgf[2+LSM9DS0_MAG_ENABLE][3] = {{0}, {0}};
+
+	double min[2+LSM9DS0_MAG_ENABLE][3] = {{0}, {0}};
+	double max[2+LSM9DS0_MAG_ENABLE][3] = {{0}, {0}};
+	double mean[2+LSM9DS0_MAG_ENABLE][3] = {{0}, {0}};
+	double std_dev[2+LSM9DS0_MAG_ENABLE][3] = {{0}, {0}};
+
+	// min can't be initialized to 0, set it to max = 16000,0
+	for(i = 0;i<6+LSM9DS0_MAG_ENABLE*3;i++)
+		min[i/3][i%3] = 16000.0;
+
+	// Threads created to send data to sigfox thread don't need to be joined
+	pthread_attr_t attr;
 	pthread_attr_init(&attr);
 	pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
-
-	printf("Mark 8");
 
 	sleep(1);
 
 	while(!end_program)
 	{
-		//Try to print at the same rate data is send by i2c
+		// Read the data depending on the input rate
 		nanosleep(&tt, NULL);
 
 		if(message_queue[pos].read_allowed == 0)
 			continue;
-
-		count++;
 
 		// Add new data to the sums, actualize min and max if needed
 		for (i = 0; i < 2+LSM9DS0_MAG_ENABLE; i++)
@@ -511,25 +511,27 @@ static void * stats(void * args)
 			}
 		}
 
+		count++;
+
 		// Every X measures (interval(sec)*input_rate(measures/sec)) :
-		//   -Calculate the standard deviation for ACC
-		//   -See if the scale needs to be changed
-		//   -Send data to sigfox
-		if (count%(INPUT_DATA_RATE*INTERVAL_CALC_SCALE) == 0)
+		//   - Calculates the standard deviation and mean for ACC
+		//   - See if the scale needs to be changed
+		//   - Send data to sigfox (when timer is reached)
+		if (count%(NB_MEASURES_INTERVAL) == 0)
 		{
 			for(i = 0; i < 3; i++)
 			{
 				mean[ACC][i] = calc_mean(sum[ACC][i],
-						INPUT_DATA_RATE*INTERVAL_CALC_SCALE);
+						NB_MEASURES_INTERVAL);
 				std_dev[ACC][i] = calc_std_dev(
 						sum_square[ACC][i], 
-						INPUT_DATA_RATE*INTERVAL_CALC_SCALE, 
+						NB_MEASURES_INTERVAL, 
 						mean[ACC][i]);
 				//adds temp_sums to total_sums and reset them
 				for(j = 0; j < 2 + LSM9DS0_MAG_ENABLE; j++)
 				{
-					sum_total[j][i] += sum[j][i];
-					sum_square_total[j][i] += sum_square[j][i];
+					sum_sgf[j][i] += sum[j][i];
+					sum_square_sgf[j][i] += sum_square[j][i];
 					sum[j][i] = 0;
 					sum_square[j][i] = 0;
 				}
@@ -546,16 +548,16 @@ static void * stats(void * args)
 					{
 
 						tab_data[i][j].mean = calc_mean(
-								sum_total[i][j],
+								sum_sgf[i][j],
 								QUEUE_SIZE*count);
 						tab_data[i][j].std_dev = calc_std_dev(
-								sum_square_total[i][j], 
+								sum_square_sgf[i][j], 
 								QUEUE_SIZE*count, 
 								mean[i][j]);
 						tab_data[i][j].min = min[i][j];
 						tab_data[i][j].max = max[i][j];
-						sum_total[i][j] = 0;
-						sum_square_total[i][j] = 0;
+						sum_sgf[i][j] = 0;
+						sum_square_sgf[i][j] = 0;
 						min[i][j] = 0;
 						max[i][j] = 0;
 						if(SGF_ENABLE)
@@ -574,7 +576,10 @@ static void * stats(void * args)
 	}
 
 	pthread_attr_destroy(&attr);
-	sleep(1); // Wait before delete tab_data if a thread send_sigfox still needs it
+
+	// Wait before deleting tab_data if a thread send_sigfox still needs it
+	sleep(1);
+
 	pthread_exit((void *) 1);
 }
 
@@ -589,18 +594,18 @@ void *acq_GYR_ACC(void * arg)
 	};
 
 	scale_config acc_scale = SCALE_ACC_4G;
-	uint8_t i = 0, j = 0, k = 0, pos = 0;
+	uint8_t i, j, k, pos = 0, scale = 2;
 	uint8_t nb_acq = LSM9DS0_MAG_ENABLE ? 3 : 2; //3 if magnetometer is used
 	int16_t* data[nb_acq];
 
 	pthread_t print_thread, stats_thread;
 
-	struct data_acq message_queue[QUEUE_SIZE] ={
+	struct data_acq message_queue[QUEUE_SIZE] = {
 		{.read_allowed = 0}
 	};
 
 
-	// Allocate mem to buffer getting data from sensors :
+	// Allocate memory to buffer getting data from sensors :
 	// (x, y, z) = 3 for (ACC, GYR, (MAG))=2or3 containing a float
 	if(!(message_queue[0].data = malloc(nb_acq*QUEUE_SIZE*sizeof(float *)))
 			|| !(message_queue[0].data[0] = 
@@ -622,22 +627,11 @@ void *acq_GYR_ACC(void * arg)
 		}
 	}
 
-	/*  
-	    message_queue |_________________[0]_______________|____________[1]_______...
-	    .data         |____[0]____|_____[1]___|____[2]____|_____[0]___|...|...
-	    []            |[0]|[1]|[2]|[0]|[1]|[2]|[0]|[1]|[2]|[0]|[1]|[2]|[0]|...|...
-
-*/
-	uint8_t scale = 2; 
-
+	// data is a buffer used to stock int16_t values received by the sensors
 	data[0] = malloc(nb_acq*3*sizeof(int16_t));
 	for(i = 1; i < nb_acq; i++)
 		data[i] = data[0] + 3*i;
 
-	if(!bcm2835_i2c_begin())
-		pthread_exit((void *) 0);
-
-	printf("Mark 1");
 	// Setup the cleanup handlers
 	struct acq_cleanup_args args;
 	args.alive = arg;
@@ -653,37 +647,37 @@ void *acq_GYR_ACC(void * arg)
 		.change_scale = scale
 	};
 
-	printf("Mark 2");
-	// Setup i2c, then setup ctrl registers of the lsm9ds0, create thread
+	// Create the two threads for printing to file & calculating statistics
 	if(!setup_all() || pthread_create(&print_thread, NULL,	print_to_file,
 				(void *) message_queue)
 			|| pthread_create(&stats_thread, NULL, stats,
 			       	(void *) &stats_args))
 	{
-		printf("Exiting acq_Gyr_Acc thread\n");
+		printf("Failed to create secondary threads, exiting acq_Gyr_Acc"
+				" thread\n");
 		pthread_exit((void *) 0);
 	}
 
-	sleep(10);
+	sleep(1);
 
+	// Read the registers values for scale and sensitivity
 	get_float_data(data, message_queue[pos].data, 1);
 
-	uint8_t tmp;
-	readReg(GYR_ADDRESS, CTRL_REG2_G, &tmp, 1);
-	tmp &= 0b01111111;
-
-	printf("Mark 3");
-	// main thread loop
+	// main loop
 	while(!end_program)
 	{
+		// Read every tt.nsec nsec depending on the desired data rate
 		nanosleep(&tt, NULL);
 
 		message_queue[(pos + 1) % QUEUE_SIZE].read_allowed = 0;
 
+		// If the stats thread modified the change_scale var, executes 
+		// the modification
 		if (stats_args.change_scale != scale)
 		{
 			scale = stats_args.change_scale;
-			printf("\n\tChanged accelerometer scale to : %ig\n", scale == 5 ? 16 : scale*2);
+			printf("\n\tChanged accelerometer scale to : %ig\n", 
+					scale == 5 ? 16 : scale*2);
 			acc_scale.reg_config = (scale - 1) << 3;
 			acc_scale.value = scale == 5 ? 0.488 : 0.061 * scale;
 			setup_accelerometer(&acc_scale);
@@ -691,13 +685,14 @@ void *acq_GYR_ACC(void * arg)
 			nanosleep(&tt, NULL);
 		}
 		
-		read_all(data);
-
+		// Fill the data_acq with data and time
 		gettimeofday(&message_queue[pos].acq_time, NULL);
-
+		read_all(data);
 		get_float_data(data, message_queue[pos].data, 0);
-		//ADD to queue
+
+		// Indicates to the other threads that the data can be read
 		message_queue[pos].read_allowed = 1;
+
 		pos = (pos + 1) % QUEUE_SIZE;
 	}
 
@@ -707,7 +702,6 @@ void *acq_GYR_ACC(void * arg)
 
 static uint8_t open_new_file(FILE **fp)
 {
-	printf("Mark 4");
 	if(*fp != NULL)
 		fclose(*fp);
 
@@ -756,7 +750,6 @@ static uint8_t open_new_file(FILE **fp)
 	}
 
 	printf("\tSaving accelerometer data to file : %s\n", path);
-	printf("Mark 5");
 
 	free(path);
 	return 1;
@@ -781,41 +774,45 @@ void *print_to_file(void * arg)
 	tt.tv_nsec = (long) 18000000.0;
 
 	char *time_string = malloc(100*sizeof(char));
-	int a=0;
+	int size_string = 0;
 	FILE *fp = NULL;
+
 	//transfer from i2c thread to print thread is done through a message
 	//queue which contains up to QUEUE_SIZE records. 
-	// This thread reads data when message_queue[i].read_allowed var is set to 1.
+	// This thread reads data when message_queue[i].read_allowed == 1.
 	struct data_acq *message_queue = (struct data_acq*) arg;
 	uint8_t pos = 0;
 
 	open_new_file(&fp);
 	add_header(fp);
-	printf("Mark 6");
 
 	sleep(1);
 	while(!end_program)
 	{
+		// Try to print at the same rate data is send by i2c
+		nanosleep(&tt, NULL);
+
+		// Open new file is old one is full
 		if(ftell(fp) > SIZE_MAX_FILE*1024)
 		{
 			open_new_file(&fp);
 			add_header(fp);
 		}
 
-
-		//Try to print at the same rate data is send by i2c
-		nanosleep(&tt, NULL);
-
+		// Wait for acq_GYR_ACC to set read_allowed to 1
 		if(message_queue[pos].read_allowed == 0)
 			continue;
 
+		// Construct and print time
 		strcpy(time_string, ctime(&message_queue[pos].acq_time.tv_sec));
-		a = strlen(time_string);
+		size_string = strlen(time_string);
 		sprintf(time_string, "%s %uus", 
 				ctime(&message_queue[pos].acq_time.tv_sec),
 				(unsigned int) message_queue[pos].acq_time.tv_usec/1000);
-		time_string[a-1] = ' ';
+		time_string[size_string-1] = ' ';
 		fprintf(fp, "%s, ", time_string);
+
+		// Print the data
 		fprintf(fp, "%g, %g, %g, %g, %g, %g", 
 				message_queue[pos].data[ACC][X],
 				message_queue[pos].data[ACC][Y],
@@ -823,8 +820,6 @@ void *print_to_file(void * arg)
 				message_queue[pos].data[GYR][X],
 				message_queue[pos].data[GYR][Y],
 				message_queue[pos].data[GYR][Z]);
-
-
 		if(LSM9DS0_MAG_ENABLE)
 			fprintf(fp, ",%g,%g,%g,",
 					message_queue[pos].data[MAG][X],
@@ -836,6 +831,7 @@ void *print_to_file(void * arg)
 		//Garder pos entre 0 et QUEUE_SZE
 		pos = (pos + 1) % QUEUE_SIZE;
 	}
+
 	free(time_string);
 	pthread_exit((void *) 1);
 }

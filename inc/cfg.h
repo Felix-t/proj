@@ -14,12 +14,6 @@
 #include "headers.h"
 #include "util.h"
 
-enum {MAX_VOLT,	//Battery volt capacity
-	MIN_VOLT,
-	THRESHOLD,    		//Battery 
-	LAST_DISCHARGE, 		//Discharge volt last acquisition
-	ACQ_TIME};     		//Discharge time last acquisition
-
 
 void get_cfg_str(char **values, char **str,int32_t str_nb);
 void get_cfg_double(double *values, char **str, int32_t str_nb);

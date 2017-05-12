@@ -16,7 +16,7 @@ typedef struct cleanup_args{
 static void battery_cleanup(void * arg)
 {
 	struct cleanup_args *args = arg;
-	printf("battery cleanup");
+	printf("Battery cleanup\n");
 	bcm2835_spi_end();
 	end_program = 1;
 	fclose(args->fp);
@@ -30,21 +30,15 @@ static void battery_cleanup(void * arg)
 */
 void *battery(void *arg)
 {
-
-	int32_t volt = -1;
-	int32_t adc;
-	int32_t i;
-	FILE *fp;
 	printf("Battery thread ID : %li\n", syscall(__NR_gettid));
+
+	int32_t i, adc, volt = -1;
 	time_t t;
-	//struct timespec tt;
-	//tt.tv_sec = 0;
-	//tt.tv_nsec = (long) 1000000000.0/MEASURE_FREQUENCY;
+
 	cleanup_args args;
 	args.alive = arg;
 	*(args.alive) = 1;
-	fp = fopen(PATH_VOLT_LOGS, "a+");
-	args.fp = fp;
+	args.fp = fopen(PATH_VOLT_LOGS, "a+");
 	
 	pthread_cleanup_push(battery_cleanup, (void*) &args);
 
@@ -53,8 +47,11 @@ void *battery(void *arg)
 		printf("init failed\n");
 		pthread_exit((void *) 0);
 	}
-	while(volt == -1 || check_battery(volt) )
+	do
 	{
+		// Check battery immediately at start
+		if(volt != -1)
+			sleep(INTERVAL);
 		adc = 0;
 		for (i = 0;i< NB_MEASURES; i++)
 		{
@@ -62,15 +59,16 @@ void *battery(void *arg)
 			adc += (int32_t) (double)ADS1256_GetAdc(CH_NUM)
 			       		/ (double) NB_MEASURES;
 		}
+
 		volt = (adc * 100) / 167;
 		t = time(NULL);
-		fprintf(fp, "%s, %i.%03i %03i V \r\n", ctime(&t), 
+		fprintf(args.fp, "%s, %i.%03i %03i V \r\n", ctime(&t), 
 				volt /1000000, (volt%1000000)/1000, volt%1000); 
-		fflush(fp); // To fprint immediately
+		fflush(args.fp); // To fprint immediately
 		if(volt < 0)
 			volt = -volt;
-		sleep(INTERVAL);
-	}
+		
+	}while(check_battery(volt));
 	
 //	set_next_startup(100); //@TODO : 100 for testing
 	pthread_cleanup_pop(1);
@@ -129,14 +127,13 @@ static uint8_t check_battery(int32_t volt)
 	static double value[NB_CFG_BATTERY] = {0,0,0,0,0};
 	static int32_t start_volt = 0;
 	static time_t start_time = 0;
-	static double treshold;
+	static double threshold;
 
 	if(start_volt == 0)
 		start_volt = volt;
 
 	if(!start_time)
 	{
-		printf("start time init\n");
 		time(&start_time);
 	}
 	
@@ -151,8 +148,9 @@ static uint8_t check_battery(int32_t volt)
 		// Uncomment to have duration of acquisition dependent on 
 		// last acquisition :
 		//set_acq_time(volt, value);
-		treshold = value[MIN_VOLT] + 
-			(value[MAX_VOLT] - value[MAX_VOLT])*value[THRESHOLD];
+		threshold = value[MIN_VOLT] + 
+			(value[MAX_VOLT] - value[MIN_VOLT])*value[THRESHOLD];
+		printf("Value threshold : %f\n", threshold);
 	}
 
 	// Update configuration MAX_VALUE if actual voltage is >	
@@ -165,15 +163,22 @@ static uint8_t check_battery(int32_t volt)
 
 	//If voltage is less than fixed threshold or acq_time has been reached,
 	//save config and shutdown the raspberry pi
-	if (volt/1000000 < treshold
+	if (volt/1000000 < threshold
 			|| difftime(time(NULL), start_time) > value[ACQ_TIME])
 	{
 		char *str[2] = {"ACQ_TIME", "LAST_DISCHARGE"};
 		double tmp_value[2];
-		tmp_value[0] = difftime(time(NULL), start_time);
-		tmp_value[1] = (volt - start_volt)/1000000;
+
+		// Uncomment and comment next lines to have duration of 
+		// acquisition dependent on last acquisition
+		//tmp_value[0] = difftime(time(NULL), start_time);
+		tmp_value[0] = value[ACQ_TIME];
+
+		tmp_value[1] = (volt - start_volt)/1000000.0;
 		set_cfg(str, tmp_value, 2);
-		set_next_startup((int32_t) (24*3600-tmp_value[0]));
+
+		// Uncomment to schedule next startup
+		//set_next_startup((int32_t) (SEC SINCE 00:00:00));
 		return 0;
 	}
 

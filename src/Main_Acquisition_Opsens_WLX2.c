@@ -197,8 +197,8 @@ void * acq_WLX2(void * args)
 	char nomfic[_STR_LONG]={'\0'};
 	char rep_usb[_STR_LONG]={'\0'};
 
-	char *numero_jauge_ch[NB_CH];
-	char *type_jauge_ch[NB_CH];
+	char *numero_jauge_ch[NB_CH] = {NULL};
+	char *type_jauge_ch[NB_CH] = {NULL};
 
 	struct parametres_connexion param_connection;
 	struct config_save_file pconfig_save_file;

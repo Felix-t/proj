@@ -55,14 +55,13 @@ fin_Find_substr_in_str:;
 /********************************************************/
 int Find_position_substr_in_str(char *str, char *substr)
 {
-	int i,j,pos;
-	int len_str,len_substr;
-	char *temp_str;
+	int i,j,pos = -1;
+	int len_str = 0,len_substr = 0;
+	char *temp_str = NULL;
 
 	len_str=strlen(str);
 	len_substr=strlen(substr);
 
-	pos=-1;
 	if ((len_substr==0)||(len_str<len_substr)){goto fin_Find_position_substr_in_str;}
 
 	temp_str=malloc((len_str+1)*sizeof(char));
@@ -71,7 +70,7 @@ int Find_position_substr_in_str(char *str, char *substr)
 
 	for(i=0;i<(len_str-len_substr+1);i++)
 	{
-		Zero_str(temp_str);
+		memset(temp_str, 0, len_str+1);
 		for(j=0;j<len_substr;j++)
 		{
 			temp_str[j]=str[i+j];

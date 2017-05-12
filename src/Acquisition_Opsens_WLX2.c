@@ -627,6 +627,7 @@ void* thread_Enregistrement_data (void* arg)
 
 	while(ok_record)
 	{
+		pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
 		size_file=p_data->pshared->size_save_file;
 
 		nb_channel_actif=0;
@@ -776,6 +777,8 @@ void* thread_Enregistrement_data (void* arg)
 		pthread_mutex_unlock(p_data->pshared->mutex);
 	}
 
+	pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
+
 	pthread_mutex_lock(p_data->pshared->mutex);
 	p_data->pshared->ok_record=0;
 	pthread_mutex_unlock(p_data->pshared->mutex);
@@ -848,8 +851,9 @@ static void stats(struct stUDPSendMeasureType_t *ch1,
 			else
 				data_to_send[i].id = WLX2_CH2;
 
-			pthread_create(&th[i], &attr, send_sigfox,
-					(void*) &data_to_send[i]);
+			if(SGF_ENABLE)
+				pthread_create(&th[i], &attr, send_sigfox,
+						(void*) &data_to_send[i]);
 			sum[i] = 0;
 			sum_square[i] = 0;
 			printf("Ch%i  --  Moy : %f\t Ecarts : %f\n", i, data_to_send[i].mean,
@@ -906,11 +910,11 @@ int Reception_data(struct parametres_connexion *param_connection,
 	int ok=1;
 
 	fd_set select_fds;
-
+	int sock = param_connection->ID_socket_acquisition_data;
 	FD_ZERO(&select_fds);
-	FD_SET(param_connection->ID_socket_acquisition_data, &select_fds);
+	FD_SET(sock, &select_fds);
 
-	if(select(sizeof(struct stUDPSendMeasureType_t), &select_fds,
+	if(select(sock + 1, &select_fds,
 				NULL, NULL, NULL) == 0)
 	{
 		printf("%s\n","Select has timed out ..."); 

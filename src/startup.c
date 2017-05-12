@@ -58,6 +58,10 @@ static uint8_t start_Sigfox(pthread_t *sigfox_thread, _Atomic uint8_t *alive)
  */
 static uint8_t start_Accelerometer_acq(pthread_t *accelerometer_thread, _Atomic uint8_t *alive)
 {
+	// i2c should have been set up by witty pi (outside this program),
+	// in case it didn't :
+	if(!bcm2835_i2c_begin())
+		return 0;
 
 	if(pthread_create(accelerometer_thread, NULL, acq_GYR_ACC, (void*)alive))
 		return 0;
@@ -88,7 +92,7 @@ static uint8_t start_WLX2_acq(pthread_t *WLX2_thread, _Atomic uint8_t *alive)
 	return 1;
 }
 
-/* Function : pour tester le multithreading
+/* Function : pour tester le multithreading, remplace battery management
  * Params :
  * Return :
  */
@@ -111,7 +115,8 @@ static void *test()
 		.std_dev = 5,
 		.mean = 5};
 
-	pthread_create(&thread, &attr, send_sigfox, (void *) &data_to_send);
+	if(SGF_ENABLE)
+		pthread_create(&thread, &attr, send_sigfox, (void *) &data_to_send);
 	for(i = 0; i < 2;i++)
 	{	
 		get_cpu_usage();
@@ -140,35 +145,51 @@ int  main()
 		return 0;
 
 	//Start battery management
-	//if(!start_AD_acq(&threads[i], &alive[i]) || !++i)
-	if(pthread_create(&threads[i++], NULL, test, NULL))
+	if(!start_AD_acq(&threads[i], &alive[i]) || !++i)
+	//if(pthread_create(&threads[i++], NULL, test, NULL))
 	{
 		printf("AD thread creation failed\n");
 		return 0;
 	}
-	sleep(1);
-	if(LSM9DS0_ENABLE && (!start_Accelerometer_acq(&threads[i], &alive[i])
-			       || !++i))
+	sleep(10); // Wait for first battery check
+	if(end_program)
 	{
-		printf("LSM9D0 thread creation failed\n");
-		return 0;
-	}	
-	if(WLX2_ENABLE && (!start_WLX2_acq(&threads[i], &alive[i]) || !++i))
-	{
-		printf("WLX2 thread creation failed\n");
-		return 0;
+		printf("Not enough battery to start program\n");
+		pthread_join(threads[0], NULL);
 	}
-	if(SGF_ENABLE && !start_Sigfox(&threads[i++], alive))
+	else
 	{
-		printf("Sigfox thread creation failed\n");
-		return 0;
-	}	
-	for(i = 0; i < nb_threads; i++)
-	{
-		sleep(5);
-		pthread_join(threads[i], NULL);
-	}
+		if(SGF_ENABLE && !start_Sigfox(&threads[i++], alive))
+		{
+			printf("Sigfox thread creation failed\n");
+			return 0;
+		}
+		else if(SGF_ENABLE)
+		{
+			// Wait until sigfox downlink message has been processed
+			while(alive[1] != 1)
+				sleep(1);
+		}
+		if(LSM9DS0_ENABLE && (!start_Accelerometer_acq(&threads[i], 
+						&alive[i])
+					|| !++i))
+		{
+			printf("LSM9D0 thread creation failed\n");
+			return 0;
+		}	
+		if(WLX2_ENABLE && (!start_WLX2_acq(&threads[i], &alive[i]) 
+					|| !++i))
+		{
+			printf("WLX2 thread creation failed\n");
+			return 0;
+		}
 
+		for(i = 0; i < nb_threads; i++)
+		{
+			sleep(5);
+			pthread_join(threads[i], NULL);
+		}
+	}
 	pthread_mutex_destroy(&sgf_msg.mutex);
 	free(threads);
 	if(!move_logs() || !archive_data())

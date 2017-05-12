@@ -91,8 +91,6 @@ void Init_struct_config_meas(struct config_meas *pconfig_meas, int *select_ch, i
 		pconfig_meas->select_ch[i]=1;
 		pconfig_meas->numero_jauge_ch[i]=numero_jauge_ch[i];
 		pconfig_meas->type_jauge_ch[i]=type_jauge_ch[i];
-		Zero_str(numero_jauge_ch[i]);
-		Zero_str(type_jauge_ch[i]);
 		for (j=0;j<4;j++)
 		{
 			pconfig_meas->GFx_jauge_ch[i][j]=0;

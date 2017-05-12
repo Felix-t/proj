@@ -77,13 +77,21 @@ int Init_connexion(struct parametres_connexion *param_connection)
 int Init_param_connexion(struct parametres_connexion *param_connection)
 {
 	int ok=1;
-	int ID_socket_command, ID_socket_acquisition_data;
+	int ID_socket_command = 0, ID_socket_acquisition_data = 0;
 
 	ID_socket_command=Open_socket();
 	if (ID_socket_command==-1){ok=0;goto fin_Init_param_connexion;}else{param_connection->ID_socket_command=ID_socket_command;}
 
 	ID_socket_acquisition_data=Open_socket();
-	if (ID_socket_acquisition_data==-1){ok=0;goto fin_Init_param_connexion;}else{param_connection->ID_socket_acquisition_data=ID_socket_acquisition_data;}
+	if (ID_socket_acquisition_data==-1)
+	{
+		ok=0;
+		goto fin_Init_param_connexion;
+	}
+	else
+	{
+		param_connection->ID_socket_acquisition_data=ID_socket_acquisition_data;
+	}
 
 
 	if(ok)

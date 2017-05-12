@@ -118,6 +118,8 @@ void *sigfox(void* args)
 	printf("Thread sigfox created, id : %li\n",
 			syscall(__NR_gettid));
 
+	_Atomic uint8_t *alive = args;
+
 	char *portname = "/dev/ttyUSB0";
 
 	time_t last_msg = time(NULL);
@@ -137,7 +139,6 @@ void *sigfox(void* args)
 	set_interface_attribs (fd, B19200, 0);  // set speed to 115,200 bps, 8n1 (no parity)
 	set_blocking (fd, 1);                // set no blocking
 
-	_Atomic uint8_t *alive = args;
 
 	if((messages[0] = malloc(MAX_NB_MSG*SIZE_SIGFOX_MSG)) == NULL)
 	{
@@ -153,6 +154,11 @@ void *sigfox(void* args)
 		printf("Can't open file sigfox");
 		pthread_exit((void *) 0);
 	}
+	
+	// @TODO : receive downlink message
+	
+	// Warn main thread that downlink processing is done
+	alive[1] = 1;
 
 	sgf_msg.write_allowed = 1;
 

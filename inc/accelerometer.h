@@ -130,8 +130,9 @@
 
 #define QUEUE_SIZE 		50 // number max of data not printed
 #define INTERVAL_CALC_SCALE 	10 //seconds
+#define NB_MEASURES_INTERVAL	QUEUE_SIZE*INTERVAL_CALC_SCALE
 
-#define SIZE_MAX_FILE 		500
+#define SIZE_MAX_FILE 		5000
 
 enum {X, Y, Z};
 enum instrument {ACC,GYR,MAG};
@@ -147,6 +148,11 @@ struct data_acq{
 	float **data;
 	uint16_t read_allowed;
 };
+/* message queue is an array of data_acq :  
+    message_queue |_________________[0]_______________|____________[1]_______...
+    .data         |___[ACC]___|___[GYR]___|___[MAG]___|___[ACC]___|...|...
+    []            |[x]|[y]|[z]|[x]|[y]|[z]|[x]|[y]|[z]|[x]|[y]|[z]|...|...
+*/
 
 struct acq_cleanup_args{
 	pthread_t *print_thread;
@@ -161,101 +167,105 @@ struct stats_struct{
 	_Atomic uint8_t change_scale;
 };
 
-/* Function : This thread saves the data send by the LSM9DO in the file 
- * whose path is specified in config. When end_program is set, finishes 
- * writing last records before quitting
- * Params : arg is a message queue : type struct data_acq[]
+
+
+/* Function : Thread.
+ * 	- Prints the data in the file specified in config (PATH_LSM9DS0_DATA).
+ * 	   the file changes every SIZE_MAX_FILE kbytes
+ * 	- Exit when end_program is set
+ * Params : arg is struct data_acq[QUEUE_SIZE] where data is written and read
 */
 void *print_to_file(void * arg);
 
 
-/* Function : Thread managing the acquisition from the accelerometer,
- * 		gyrometer and (if defined as asuch) magnetometer
- * Setup and config the board, then request and read the data through i2c
- * The data is sent to be saved through a message queue
+/* Function : Thread.
+ * 	- Manage the acquisition from the accelerometer, gyrometer and 
+ * 	    (if defined as such) magnetometer
+ * 	- Setup and config the board, then request and read the data through i2c
+ * 	  Does not configure i2c communication (i2c is used by other threads or
+ * 	    programs) : bcm2835_i2c_begin should be called before creating 
+ * 	    the thread
+ * 	- Create and fill the struct data_acq[QUEUE_SIZE] used to capture data
+ * Params : arg is a _Atomic uint8_t pointer indicating whether the thread is 
+ * 		running or not
 */
 void *acq_GYR_ACC(void * arg);
 
 
-/* Function : Calculates and save the min, max, mean and standard deviation
- * 	each time reset is set to 1, and change the accelerometer scale accordingly
- * 	Also calculates the statistics on longer periods (SGF_SEND_PERIOD)
- * 	then creates a thread to send the data (to the sgf thread).
- * Params : data is x,y,z values of ACC,GYR,MAG. reset indicates when the 
- * 	values needs to be calculated
-*/
-//static void stats(float **data);
+/* Function : Thread. 
+ * 	- Calculates the mean and standard deviation every INTERVAl_CALC_SCALE 
+ * 	seconds, and decides which scale should be used depending
+ * 	on these two values (for the accelerometer only).
+ *	- Send the minimum, maximum, mean and standard deviation of the 
+ *	different LSM9DS0 acquisition to the sigfox thread if it is running,
+ *	every SGF_INTERVAL seconds.
+ *	- Exit when end_program is set to 1.
+ * Params : arg is a struct stats_struct with : 
+ * 	- the message queue where the data is written and read
+ *	- *change_scale indicates which ACC scale should be used, and is read by
+ *	acq_GYR_ACC periodically
+ */
+void * stats(void * arg);
 
-
-/* Function : Set the scale for the specified LSM9D0 instrument
- * 	The hardware needs to be reconfigured with setup() afterwards	
- * Params :  * 	uint8_t instrument : from enum instrument
- * 	scale_config new_scale : new scale struct for the specified instrument
- * 	Possible choices in #define (ex SCALE_ACC...)
- * Return : 0 if instruments (@TODO : or scale) does not exist
+/* Function : Change the accelerometer, gyrometer or magnetometer sensitivity 
+ * and maximum scale by setting the correct registers
+ * Params : 
+ * 	- inst is one of ACC, GYR or MAG
+ * 	- new_scale is one of the struct scale_config defined 
+ * 		l.100 to l.117 in accelerometer.h
+ * Return : 0 in case of incorrect scale value or failure to write to registers
+ * 	1 otherwise
  */
 uint8_t set_scale(enum instrument inst, scale_config *new_scale);
 
 
 /* Function : Get the accelerometer, gyrometer and magnetometer data
- * Params : int16_t buffer[3][3] : [gyro/magn/acc] [x/y/z]
- * Return : error_code
+ * Params : int16_t buffer[2/3][3] : [ACC/GYR/MAG] [x/y/z]
+ * Return : 0 if an error occured, 1 otherwise
 */
 uint8_t read_all(int16_t **buffer);
 
 
-/* Function : get the gyrometer data
- * 	See datasheet LSM9DS0 p46 to get info about read registers
- * Params : -int16_t buffer[3] : x,y,z data points.
- * 	    -double scale : 0 or any SCALE_GYR_xxxxDPS : see p.13
- * Return : error_code
-*/
-uint8_t read_gyrometer(int16_t *buffer);
-
-
-/* Function : get the magnetometer data
- * 	See datasheet LSM9DS0 p61 to get info about read registers
- * Params : -int16_t buffer[3] : x,y,z data points.
- * 	    -double scale : 0 or any SCALE_MAG_xGAUSS : see p.13
- * Return : error_code
-*/
-uint8_t read_magnetometer(int16_t *buffer);
-
-
-/* Function : get the accelerometer data
- * 	See datasheet LSM9DS0 p61 to get info about read registers
- * Params : -int16_t buffer[3] : x,y,z data points.
- * 	    -double scale : 0 or any SCALE_ACC_xG : see p.13
- * Return : error_code
-*/
-uint8_t read_accelerometer(int16_t *buffer);
+/* Function : Query the data registers for instrument inst and fill buffer with
+ * the raw int16_t x, y, z values
+ * For info about registers see LSM9DS0 datasheet p.46(acc,mag) and 61(gyr)
+ * Params :
+ * 	- inst is one of ACC/GYR/MAG
+ * 	- buffer is an array of 3 int16_t for x/y/z
+ * Return : 0 if a read error occured
+ */
 uint8_t read_data(enum instrument inst, int16_t *buffer);
 
 
-/* Function : Configure the LSM9DS0 to start acquisition 
- * Return : error_code
-*/
+/* Function : Configure the LSM9DS0 with defaults scale values
+ * 	- accelerometer : max range 4000.0mg, sensitivity 0.122mg
+ * 	- gyrometer : max range 245.0dps, sensitivity 0.00875 dps
+ * 	- magnetometer : max range 2 gauss, sensitivity 0.08 gauss
+ * Return : 0 if an error while setting up the registers occured, 1 otherwise
+ */
 uint8_t setup_all();
 
 
 /* Function : configure the gyrometer for acquisition
  * 	See datasheet LSM9DS0 p41 42 for register configuration
- * Return : error_code
+ * Params : scale is one of the struct scale_config defined l.115 to l.117 
+ * Return : 0 if error when writing to registers, 1 otherwise
 */
 uint8_t setup_gyrometer(scale_config *scale);
 
 
 /* Function : configure the gyrometer for acquisition
  * 	See datasheet LSM9DS0 p 59 60 for register configuration
- * 	This function also enable temperature sensor
- * Return : error_code
+ * Params : scale is one of the struct scale_config defined l.108 to l.112
+ * Return : 0 if error when writing to registers, 1 otherwise
 */
 uint8_t setup_magnetometer(scale_config *scale);
 
 
 /* Function : configure the gyrometer for acquisition
  * 	See datasheet LSM9DS0 p55 56 for register configuration
- * Return : error_code
+ * Params : scale is one of the struct scale_config defined l.100 to l.105 
+ * Return : 0 if error when writing to registers, 1 otherwise
 */
 uint8_t setup_accelerometer(scale_config *scale);
 

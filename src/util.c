@@ -103,7 +103,7 @@ uint8_t set_next_startup(int32_t startup_time)
 		printf("Error opening schedule.wpi");
 		return 0;
 	}
-	fprintf(fp, "ON %s", str);
+	fprintf(fp, "OFF\t%s", str);
 	pid = fork();
 	if (pid == 0)
 	{
@@ -145,7 +145,7 @@ uint8_t program_shutdown()
 
 uint8_t move_logs()
 {
-	if(system("journalctl -u acq_surffeol > /home/pi/projet/logs/out") == -1)
+	if(system("journalctl -u acq_surffeol > /home/pi/Surffeol/logs/out") == -1)
 	{
 		printf("Error saving program output\n");
 		return 0;
@@ -153,7 +153,7 @@ uint8_t move_logs()
 		
 	pid_t pid = fork();
 	if (pid == 0) { /* child */
-		execl("/bin/mv", "/bin/mv", "/home/pi/projet/logs/", "Data/", (char *) 0);
+		execl("/bin/mv", "/bin/mv", "/home/pi/Surffeol/logs/", "Data/", (char *) 0);
 		exit(0);
 	}
 	else if (pid < 0) {
@@ -171,7 +171,7 @@ uint8_t move_logs()
 	}
 	pid = fork();
 	if (pid == 0) { /* child */
-		execl("/bin/mkdir", "/bin/mkdir", "/home/pi/projet/logs/", (char *) 0);
+		execl("/bin/mkdir", "/bin/mkdir", "/home/pi/Surffeol/logs/", (char *) 0);
 		exit(0);
 	}
 	else if (pid < 0) {

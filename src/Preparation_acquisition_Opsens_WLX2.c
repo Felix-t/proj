@@ -395,7 +395,8 @@ void Find_dernier_enregistrement(struct param_pgm *param)
 
 	while((entry=readdir(rep))!= NULL)
 	{
-		if (strcmp(".",entry->d_name) == 0 || strcmp("..",entry->d_name) == 0) continue;
+		if (strcmp(".",entry->d_name) == 0 || strcmp("..",entry->d_name) == 0)
+			continue;
 		tmp_string=malloc((strlen(entry->d_name)+1)*sizeof(char));
 		for(i=0;i<strlen(entry->d_name);i++)
 		{
@@ -440,18 +441,18 @@ void Find_dernier_enregistrement(struct param_pgm *param)
 						tmp3_string[j]='\0';
 						find=atoi(tmp3_string);
 						if (find>nb_file_save) {nb_file_save=find;}
-						tmp3_string=NULL;
 						free(tmp3_string);
+						tmp3_string=NULL;
 					}
 					find=1;
-					tmp2_string=NULL;
 					free(tmp2_string);
+					tmp2_string=NULL;
 				}
 			}
 		}
 
-		tmp_string=NULL;
 		free(tmp_string);
+		tmp_string=NULL;
 		//getchar();
 	}
 	if (closedir(rep)==-1) {exit(-1);}
