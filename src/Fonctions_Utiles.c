@@ -119,7 +119,6 @@ int Compare_2str(const char *str1, char *str2)
 		ok=ok*ok_c;
 	}
 
-
 fin_compare_2str:;
 		 return ok;
 }

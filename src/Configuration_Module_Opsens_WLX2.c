@@ -15,7 +15,7 @@
 int Configuration_WLX2(struct parametres_connexion *param_connection, struct config_all *pconfig_all)
 {
 	int ok;
-
+	char current_date[20], current_time[20];
 
 	ok=Configuration_WLX2_SAMPLingrate_MEASureRATE(param_connection, pconfig_all);
 
@@ -26,10 +26,14 @@ int Configuration_WLX2(struct parametres_connexion *param_connection, struct con
 		ok=Configuration_WLX2_channel(param_connection, pconfig_all);
 	}
 
-	//	if (ok)
-	//	{
-	//		ok=Configuration_WLX2_date_time(param_connection);;
-	//	}
+		if (ok)
+		{
+			Get_date_time_from_RPI(current_date, current_time);
+			Change_date_WLX2(param_connection, current_date);
+			Change_time_WLX2(param_connection, current_time);
+
+			//ok=Configuration_WLX2_date_time(param_connection);;
+		}
 
 
 	return ok;
@@ -875,7 +879,7 @@ int Configuration_WLX2_date_time(struct parametres_connexion *param_connection)
 	Zero_str(current_time_WLX2);
 	Get_date_time_from_WLX2(param_connection, current_time_WLX2);
 
-	Get_date_time_from_RPI(curent_time_RPI);
+	//Get_date_time_from_RPI(curent_time_RPI);
 	//printf("%s %s\n",curent_time_RPI,current_time_WLX2);
 	ok_diff_time=Compare_date_time_RPI_WLX2(curent_time_RPI,current_time_WLX2);
 	if (ok_diff_time==0)
@@ -891,7 +895,7 @@ int Configuration_WLX2_date_time(struct parametres_connexion *param_connection)
 		Zero_str(current_time_WLX2);
 		Get_date_time_from_WLX2(param_connection, current_time_WLX2);
 		Zero_str(curent_time_RPI);
-		Get_date_time_from_RPI(curent_time_RPI);
+		//Get_date_time_from_RPI(curent_time_RPI);
 
 		printf("\t%s %s\n","WLX2: ",current_time_WLX2);
 		printf("\t%s %s\n","RPI :",curent_time_RPI);
@@ -1055,7 +1059,7 @@ int Date_time_saisie(struct parametres_connexion *param_connection, int choix_mo
 /*Fonction: Get date time du RPI                      */
 /*                                                      */
 /********************************************************/
-int Get_date_time_from_RPI(char *current_time)
+int Get_date_time_from_RPI(char *current_date, char *current_time)
 {
 	int day,month,year,hour,minute,second;
 
@@ -1075,7 +1079,8 @@ int Get_date_time_from_RPI(char *current_time)
 	minute=t->tm_min;
 	second=t->tm_sec;
 
-	sprintf(current_time,"%04d-%02d-%02d %02d:%02d:%02d",year,month,day,hour,minute,second);
+	sprintf(current_date, "%04d-%02d-%02d",year,month,day);
+	sprintf(current_time, "%02d:%02d:%02d",hour,minute,second);
 
 	return 1;
 }
@@ -1176,6 +1181,7 @@ int Change_date_WLX2(struct parametres_connexion *param_connection, char *curren
 
 	strcat(command,current_date);
 
+	printf("Change date : ..\n");
 	return Send_command_and_receive_answer_2(param_connection,command,
 			NB_CH,answer_2, 0);
 }
@@ -1202,6 +1208,7 @@ int Change_time_WLX2(struct parametres_connexion *param_connection, char *curren
 
 	strcat(command,current_time);
 
+	printf("Change time : ..\n");
 	return Send_command_and_receive_answer_2(param_connection,command,
 			NB_CH,answer_2, 0);
 }

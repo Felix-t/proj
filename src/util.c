@@ -118,27 +118,16 @@ uint8_t set_next_startup(int32_t startup_time)
 
 
 // Exec sudo shutdown -t 1 to poweroff the system in 1 min
-uint8_t program_shutdown()
+uint8_t program_shutdown(uint32_t min_until_shutdown)
 {
-	pid_t pid = fork();
-	if(pid == 0)
+	char cmd[100];
+	sprintf(cmd, "shutdown -t %i", min_until_shutdown);
+
+	if(system(cmd) == -1)
 	{
-		execl("/sbin/shutdown", "/sbin/shutdown", "-t", "1", (char *) 0);
-		exit(0);
-	}
-	else if (pid < 0) {
-		printf(" error - couldn't start process");
+		printf("Error etting up poweroff\n");
 		return 0;
-	}
-	else {
-		sleep(TIMEOUT);
-		pid_t ws = waitpid( pid, NULL,0);
-		if (ws == -1)
-		{
-			printf("Error during shutdown cmd");
-			return 0;
-		}
-	}
+	} 
 	return 1;
 }
 
@@ -330,7 +319,6 @@ uint8_t archive_data()
 
 	closedir(FD);
 
-	printf("Trying to compress to %s%s...\n", dir_name, file_name);
 	
 	if (Calcul_free_space(dir_name, 0) < (1048756.0*usb_size*0.03))
 	{
@@ -340,6 +328,7 @@ uint8_t archive_data()
 	}
 	strcat(dir_name, file_name);
 
+	printf("Trying to compress to %s%s...\n", dir_name, file_name);
 	if(!exec_compression(dir_name))
 	{
 		free(dir_name);
@@ -383,26 +372,14 @@ static uint8_t delete_data()
 
 static uint8_t exec_compression(char * path)
 {
-	pid_t pid = fork();
-	if (pid == 0) { /* child */
-		execl("/usr/bin/lrztar", "/usr/bin/lrztar", "-l", "-L", "5",
-				"-o", path, "Data/", (char *)0); //@TODO : remplacer Data/ par const ou config
-		exit(0);
-	}
-	else if (pid < 0) {
-		printf(" error - couldn't start process");
+	char cmd[100];
+	sprintf(cmd, "/usr/bin/lrztar -l -L 5 -o %s Data/", path);
+	if(system(cmd) == -1)
+	{
+		printf("Error during compression");
 		return 0;
 	}
-	else {
-		sleep(TIMEOUT);
-		pid_t ws = waitpid( pid, NULL, WNOHANG);
-		if (ws == -1)
-		{
-			printf("Error during compression");
-			return 0;
-		}
-		//execl("/bin/rm", "/bin/rm", "-r", "-f", "Data/Data/", (char *) 0);
-		return 1;
-	}
+	sleep(TIMEOUT);
+	printf("\t Compression done\n");
 	return 1;
 }

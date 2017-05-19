@@ -367,8 +367,8 @@ int Zero_sensor(struct parametres_connexion *param_connection, int ch1_zero, int
 {
 	char command1a[10]="SENSor",command1b[10]=":ZERO";
 	char command[100]={'\0'};
-	char reponse_ok[3]="ok";
-	char answer1[100]={'\0'},answer2[100]={'\0'};
+	char reponse_ok[3]="ok"; //?WLX2 doesn't send ok back, but value of zero
+	char answer1[100]="\0",answer2[100]="\0";
 	char answer_2[2][_RECEIVE_BUFF_SIZE]={"\0","\0"};
 
 
@@ -382,9 +382,11 @@ int Zero_sensor(struct parametres_connexion *param_connection, int ch1_zero, int
 
 		if(!Send_command_and_receive_answer_2(param_connection,command,
 					NB_CH,answer_2, 0)
-				|| !Compare_2str(reponse_ok, answer_2[0]))
+				//|| !Compare_2str(reponse_ok, answer_2[0]))
+				)
 			return 0;
 	}
+
 
 	if (ch2_zero)
 	{
@@ -394,9 +396,11 @@ int Zero_sensor(struct parametres_connexion *param_connection, int ch1_zero, int
 		strcat(command,command1b);
 
 		Zero_str(answer1);Zero_str(answer2);
+		printf("%s,\n", command);
 		if(!Send_command_and_receive_answer_2(param_connection,command,
 					NB_CH,answer_2, 0)
-				|| !Compare_2str(reponse_ok, answer_2[0]))
+				//|| !Compare_2str(reponse_ok, answer_2[0]))
+			)
 			return 0;
 	}
 
@@ -560,6 +564,7 @@ int Stop_Thread_Enregistrement_data(struct param_pgm *param)
 		Zero_str(answer_2[0]);Zero_str(answer_2[1]);
 		Send_command_and_receive_answer_2(param->pparam_connection,
 				"MEASure:STOP", 2 ,answer_2, 0);
+		printf("\tMeasure:STOP sent\n");
 	}
 
 	return ok;
@@ -627,6 +632,7 @@ void* thread_Enregistrement_data (void* arg)
 
 	while(ok_record)
 	{
+		// Don't quit while acquisition is running
 		pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
 		size_file=p_data->pshared->size_save_file;
 

@@ -12,6 +12,6 @@ uint8_t exec_script(char *cmd);
 uint8_t archive_data();
 uint8_t move_logs();
 uint8_t start_dhcp_server();
-uint8_t program_shutdown();
+uint8_t program_shutdown(uint32_t min_until_shutdown);
 
 #endif

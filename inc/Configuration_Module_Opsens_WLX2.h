@@ -23,7 +23,7 @@ int Configuration_WLX2_date_time(struct parametres_connexion *param_connection);
 
 int Date_time_saisie(struct parametres_connexion *param_connection, int choix_modif, char *str_ans_time,char *str_ans_date);
 
-int Get_date_time_from_RPI(char *current_time);
+int Get_date_time_from_RPI(char *current_date, char *current_time);
 
 int Get_date_time_from_WLX2(struct parametres_connexion *param_connection, char *current_time);
 

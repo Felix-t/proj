@@ -24,11 +24,11 @@
 #include <libconfig.h>
 #include <pthread.h>
 
-#define SGF_ENABLE 0  //Sigfox enabled
+#define SGF_ENABLE 1  //Sigfox enabled
 #define LSM9DS0_MAG_ENABLE 0
-#define LSM9DS0_ENABLE 0
-#define WLX2_ENABLE 0
-#define SHUTDOWN 0
+#define LSM9DS0_ENABLE 1
+#define WLX2_ENABLE 1
+#define SHUTDOWN 1
 
 
 //#define TEMPUSB "tempUSB/" //@ TODO: for debug purposes

@@ -5,22 +5,22 @@
 # Provides:          wittypi
 # Required-Start:    $remote_fs $syslog
 # Required-Stop:     $remote_fs $syslog
-# Default-Start:     3 4 5
+# Default-Start:     2 3 4 5
 # Default-Stop:      0 1 6
-# Short-Description: Witty Pi initialize script
-# Description:       This service is used to manage Witty Pi service
+# Short-Description: Witty Pi 2 initialize script
+# Description:       This service is used to manage Witty Pi 2 service
 ### END INIT INFO
 
 case "$1" in
     start)
-        echo "Starting Witty Pi Daemon..."
+        echo "Starting Witty Pi 2 Daemon..."
         sudo /home/pi/wittyPi/daemon.sh &
-	sleep 3
+	sleep 1
 	daemonPid=$(ps --ppid $! -o pid=)
 	echo $daemonPid > /var/run/wittypi_daemon.pid
         ;;
     stop)
-        echo "Stopping Witty Pi Daemon..."
+        echo "Stopping Witty Pi 2 Daemon..."
 	daemonPid=$(cat /var/run/wittypi_daemon.pid)
 	kill -9 $daemonPid
         ;;

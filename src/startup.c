@@ -71,7 +71,7 @@ static uint8_t start_Accelerometer_acq(pthread_t *accelerometer_thread, _Atomic 
 
 
 
-/* Function start_WLX2_acq :
+/* Function : start_WLX2_acq
  * Create the thread used for optic fiber acquisition with the WLX2 module
  * Params : Pid of the thread, condition signal to end of the thread
  * Return : Success/failure code
@@ -131,11 +131,14 @@ static void *test()
 
 int  main()
 {	
-	sleep(10);
+	sleep(20);
 	uint8_t i = 0;
 	uint8_t nb_threads = SGF_ENABLE + LSM9DS0_ENABLE + WLX2_ENABLE +1;
 	pthread_t *threads = malloc(nb_threads*sizeof(pthread_t));
 	_Atomic uint8_t alive[nb_threads];
+	for(i=0; i< nb_threads;i++)
+		alive[i] = 0;
+	i = 0;
 
 	pthread_mutex_init(&sgf_msg.mutex, NULL);
 
@@ -194,10 +197,10 @@ int  main()
 	free(threads);
 	if(!move_logs() || !archive_data())
 		return 0;	
-	if(SHUTDOWN && !program_shutdown())
+	if(SHUTDOWN && !program_shutdown(2))
 		return 0;
 	bcm2835_close();
-	return 1;
+	return 0;
 } 
 
 

@@ -687,7 +687,8 @@ void *acq_GYR_ACC(void * arg)
 		
 		// Fill the data_acq with data and time
 		gettimeofday(&message_queue[pos].acq_time, NULL);
-		read_all(data);
+		if(!read_all(data))
+			continue;
 		get_float_data(data, message_queue[pos].data, 0);
 
 		// Indicates to the other threads that the data can be read
