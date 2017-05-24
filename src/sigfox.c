@@ -5,7 +5,7 @@
 #include <fcntl.h>
 
 static uint8_t build_message(uint8_t msg[12], uint32_t t, float val1, float val2, 
-		_Atomic uint8_t *alive, identity id, uint8_t msg_type);
+		identity id, uint8_t msg_type);
 static time_t get_ref_time();
 static uint8_t set_interface_attribs (int fd, int speed, int parity);
 static uint8_t set_blocking (int fd, int should_block);
@@ -96,7 +96,7 @@ void * send_sigfox(void *args)
 			syscall(__NR_gettid));
 		sleep(2);
 	}
-	printf("Thread send data exited");
+	printf("Thread send data exited\n");
 	pthread_exit(0);
 }
 
@@ -108,7 +108,7 @@ static time_t get_ref_time()
 	// @TODO : start de la journée ? quelle valeur de réf:
 	tmp->tm_sec = 0;
 	tmp->tm_min = 0;
-	tmp->tm_hour = 0;
+	tmp->tm_hour = tmp->tm_hour >= 12 ? 12 : 0; 
 	return mktime(tmp);
 }
 
@@ -117,8 +117,6 @@ void *sigfox(void* args)
 {
 	printf("Thread sigfox created, id : %li\n",
 			syscall(__NR_gettid));
-
-	_Atomic uint8_t *alive = args;
 
 	char *portname = "/dev/ttyUSB0";
 
@@ -134,16 +132,18 @@ void *sigfox(void* args)
 	if (fd < 0)
 	{
 		printf("error %d opening %s: %s", errno, portname, strerror (errno));
-		return 0;
+		alive[SGF] = 2;
+		pthread_exit((void *) 0);
 	}
-	set_interface_attribs (fd, B19200, 0);  // set speed to 115,200 bps, 8n1 (no parity)
+	set_interface_attribs (fd, B19200, 0);  // set speed to 19,200 bps, 8n1 (no parity)
 	set_blocking (fd, 1);                // set no blocking
 
 
 	if((messages[0] = malloc(MAX_NB_MSG*SIZE_SIGFOX_MSG)) == NULL)
 	{
 		printf("malloc failed\n");
-		return 0;
+		alive[SGF] = 2;
+		pthread_exit((void *) 0);
 	}
 	for(i = 0; i < MAX_NB_MSG; i++)
 		messages[i] = messages[0] + 12*i;
@@ -152,13 +152,13 @@ void *sigfox(void* args)
 	if(!(fp = fopen("logs/sigfox", "w+")))
 	{
 		printf("Can't open file sigfox");
+		alive[SGF] = 2;
 		pthread_exit((void *) 0);
 	}
 	
 	// @TODO : receive downlink message
 	
-	// Warn main thread that downlink processing is done
-	alive[1] = 1;
+	alive[SGF] = 1;
 
 	sgf_msg.write_allowed = 1;
 
@@ -173,19 +173,19 @@ void *sigfox(void* args)
 		//if acq thread has finished writing :
 		if(sgf_msg.write_allowed == 0)
 		{
-			if(difftime(sgf_msg.time, ref_time) > 3600*24)
-				ref_time += 3600*24;
+			if(difftime(sgf_msg.time, ref_time) > 3600*12)
+				ref_time = get_ref_time();
 			t = (uint32_t) difftime(sgf_msg.time, ref_time);
 
 			//Build message min/max
 			pos_in += build_message(messages[pos_in], t, 
 					sgf_msg.min, sgf_msg.max, 
-					alive, sgf_msg.id, 0);
+					sgf_msg.id, 0);
 			
 			//Build message mean/standard dev
 			pos_in += build_message(messages[pos_in], t,
 					sgf_msg.mean, sgf_msg.std_dev,
-					alive, sgf_msg.id, 1);
+					sgf_msg.id, 1);
 			sgf_msg.write_allowed = 1;
 		}
 		pthread_mutex_unlock(&sgf_msg.mutex);
@@ -205,7 +205,7 @@ void *sigfox(void* args)
 		}
 		sleep(1);
 	}
-
+	alive[SGF] = 0;
 	//If messages > 140, allow the send_sigfox thread to exit by setting 
 	// the shared variable to 1 continuously
 	while(!end_program)
@@ -221,8 +221,9 @@ void *sigfox(void* args)
 
 
 static uint8_t build_message(uint8_t msg[12], uint32_t t, float val1, float val2, 
-		_Atomic uint8_t *alive, identity id, uint8_t msg_type)
+		identity id, uint8_t msg_type)
 {
+	printf("Build message ; ID = %i\n", id);
 	//uint8_t tmp, i;
 	static uint8_t power = 0;
 
@@ -232,6 +233,7 @@ static uint8_t build_message(uint8_t msg[12], uint32_t t, float val1, float val2
 	if(id == AD_CONVERTER && msg_type == 1)
 	{
 		power = (uint8_t) val1;
+		printf("Battery info updated : %u\n", power);
 		return 0;
 	}
 	else if (id == AD_CONVERTER)
@@ -259,7 +261,7 @@ static uint8_t build_message(uint8_t msg[12], uint32_t t, float val1, float val2
 	if(WLX2_ENABLE)
 		msg[3]|= (alive[2] << 4);
 	*/
-	msg[3] |= power << 7;
+	msg[2] |= power;
 	msg[3] |= (id << 1);
 	msg[3] |= msg_type;
 

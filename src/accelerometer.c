@@ -257,7 +257,9 @@ static void acq_cleanup(void *arg)
 	free(ptr->data_to_free[0]);
 	free(ptr->buffer[0].data[0]);
 	free(ptr->buffer[0].data);
-	*(ptr->alive) = 0;	
+	uint8_t i;
+	for(i = LSM9DS0_ACC_X; i < LSM9DS0_ACC_X + 9; i++)
+		alive[i] = 0;	
 }
 
 uint8_t set_scale(enum instrument inst, scale_config *new_scale)
@@ -462,7 +464,8 @@ void * stats(void * arg)
 	int32_t i, j, pos = 0;
 	uint32_t count = 0;
 
-	time_t new_cycle = time(NULL);
+	// First data points are sent after 10 min
+	time_t new_cycle = time(NULL) - SGF_SEND_PERIOD + 10*60;
 
 	struct sgf_data tab_data[2+LSM9DS0_MAG_ENABLE][3];
 	pthread_t threads[6 + 3*LSM9DS0_MAG_ENABLE];
@@ -479,7 +482,10 @@ void * stats(void * arg)
 
 	// min can't be initialized to 0, set it to max = 16000,0
 	for(i = 0;i<6+LSM9DS0_MAG_ENABLE*3;i++)
+	{
 		min[i/3][i%3] = 16000.0;
+		max[i/3][i%3] = -16000.0;
+	}
 
 	// Threads created to send data to sigfox thread don't need to be joined
 	pthread_attr_t attr;
@@ -547,20 +553,23 @@ void * stats(void * arg)
 					for(j = 0; j < 3; j++)
 					{
 
+						tab_data[i][j].id = 2 + i*3+j;
 						tab_data[i][j].mean = calc_mean(
 								sum_sgf[i][j],
-								QUEUE_SIZE*count);
+								count);
 						tab_data[i][j].std_dev = calc_std_dev(
 								sum_square_sgf[i][j], 
-								QUEUE_SIZE*count, 
-								mean[i][j]);
+								count, 
+								tab_data[i][j].mean);
+						printf("\t\tEcart type : %f\n", tab_data[i][j].std_dev);
 						tab_data[i][j].min = min[i][j];
 						tab_data[i][j].max = max[i][j];
 						sum_sgf[i][j] = 0;
 						sum_square_sgf[i][j] = 0;
-						min[i][j] = 0;
-						max[i][j] = 0;
-						if(SGF_ENABLE)
+						min[i][j] = 16000.0;
+						max[i][j] = -16000.0;
+						printf("Adresse &alive[SGF] : %p\t valeur alive[SGF] : %i\n", &alive[SGF], alive[SGF]);
+						if(alive[SGF] == 1)
 							pthread_create(&threads[3*i + j], &attr,
 								send_sigfox,
 								(void*) &tab_data[i][j]);
@@ -634,8 +643,8 @@ void *acq_GYR_ACC(void * arg)
 
 	// Setup the cleanup handlers
 	struct acq_cleanup_args args;
-	args.alive = arg;
-	*args.alive = 1;
+	for(i = LSM9DS0_ACC_X; i < nb_acq*3 + LSM9DS0_ACC_X ; i++)
+		alive[i] = 1;
 	args.buffer = message_queue;
 	args.data_to_free = data;
 	args.print_thread = &print_thread;
@@ -644,7 +653,7 @@ void *acq_GYR_ACC(void * arg)
 
 	struct stats_struct stats_args = {
 		.message_queue = message_queue,
-		.change_scale = scale
+		.change_scale = scale,
 	};
 
 	// Create the two threads for printing to file & calculating statistics

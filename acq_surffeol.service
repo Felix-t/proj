@@ -4,10 +4,10 @@ Wants=wittypi.service
 
 [Service]
 Restart=always
-RestartSec=60
+RestartSec=600
 Type=idle
-WorkingDirectory=/home/pi/projet/
-ExecStart=/home/pi/projet/bin/acq_surffeol 2>&1 > /home/pi/projet/logs/out.log &
+WorkingDirectory=/home/pi/Surffeol/
+ExecStart=/home/pi/Surffeol/bin/acq_surffeol 2>&1 > /home/pi/Surffeol/logs/out.log &
 
 [Install]
 WantedBy=multi-user.target

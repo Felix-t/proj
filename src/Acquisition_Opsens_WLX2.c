@@ -815,7 +815,7 @@ static void stats(struct stUDPSendMeasureType_t *ch1,
 
 	if(!new_cycle)
 	{
-		new_cycle = time(NULL);
+		new_cycle = time(NULL) - SGF_SEND_PERIOD + 10*60;
 		max[0] = ch1->fMeasure[0];
 		min[0] = ch1->fMeasure[0];
 		max[1] = ch2->fMeasure[0];
@@ -842,6 +842,7 @@ static void stats(struct stUDPSendMeasureType_t *ch1,
 
 	if(difftime(time(NULL), new_cycle) > SGF_SEND_PERIOD)
 	{
+		printf("Sent WLX2 stats\n");
 
 		// Create the struct with the calculated statistics, 
 		// and create the thread to send this struct
@@ -857,7 +858,8 @@ static void stats(struct stUDPSendMeasureType_t *ch1,
 			else
 				data_to_send[i].id = WLX2_CH2;
 
-			if(SGF_ENABLE)
+		printf("Adresse &alive[SGF] : %p\t valeur alive[SGF] : %i\n", &alive[SGF], alive[SGF]);
+			if(alive[SGF] == 1)
 				pthread_create(&th[i], &attr, send_sigfox,
 						(void*) &data_to_send[i]);
 			sum[i] = 0;

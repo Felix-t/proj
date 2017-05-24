@@ -31,9 +31,14 @@
 #define SHUTDOWN 1
 
 
-//#define TEMPUSB "tempUSB/" //@ TODO: for debug purposes
+//#define TEMPUSB "tempUSB/" // for debug purposes
 
-#define SGF_SEND_PERIOD 600*16 // =number of used identity * SGF_INTERVAL
+//In seconds, interval between two sets of data sent with sigfox
+#define SGF_INTERVAL 600
+
+// Interval of time during which every data has been sent through sigfox network
+// = 2 messages (mean/dev & min/max) per used identity, * SGF_INTERVAL
+#define SGF_SEND_PERIOD SGF_INTERVAL*2*(2*WLX2_ENABLE + 6*LSM9DS0_ENABLE + 3*LSM9DS0_MAG_ENABLE)
 
 
 typedef enum {WLX2_CH1,
@@ -47,7 +52,8 @@ typedef enum {WLX2_CH1,
 	LSM9DS0_MAG_X,
 	LSM9DS0_MAG_Y,
 	LSM9DS0_MAG_Z,
-	AD_CONVERTER} identity;
+	AD_CONVERTER,
+	SGF} identity;
 
 
 
@@ -65,7 +71,10 @@ struct sgf_data{
  //To be modified only by main program to shutdown other threads
 extern _Atomic uint8_t end_program;
 
-// @ TODO : message queue global var or pass through pointer
+// State of the threads
+extern _Atomic uint8_t *alive;
+
+// message queue global var or pass through pointer
 struct sgf_data sgf_msg;
 
 //Forward declaration of acq_wlx

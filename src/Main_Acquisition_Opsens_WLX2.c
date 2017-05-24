@@ -29,7 +29,8 @@ static void WLX2_cleanup(void * cleanup_args)
 	cleanup_struct *args = cleanup_args;
 	for (i=0;i<args->nb_of_malloc;i++)
 		free(*args->mem_to_free[i]);
-	*args->alive = 0;
+	alive[WLX2_CH1] = 0;
+	alive[WLX2_CH2] = 0;
 	pthread_mutex_destroy(args->mutex);
 }
 
@@ -182,8 +183,8 @@ fin_main:;
 
 void * acq_WLX2(void * args)
 {
-	uint8_t *alive = args;
-	*alive = 1;
+	alive[WLX2_CH1] = 1;
+	alive[WLX2_CH2] = 1;
 
 	int *select_ch = NULL;
 	int (*GFx_jauge_ch)[4]={0};
@@ -228,7 +229,6 @@ void * acq_WLX2(void * args)
 		.mem_to_free[6] = (void *) &pconfig_meas.numero_jauge_ch[0],
 		.mem_to_free[7] = (void *) &pconfig_meas.type_jauge_ch[0],
 		.nb_of_malloc = 8, 
-		.alive = alive,
 		.mutex = &mut
 	};
 	if(NB_CH == 2)

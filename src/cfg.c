@@ -7,18 +7,74 @@
  *  @TODO : Logging system, see syslog
  */
 #include "cfg.h"
+#include <dirent.h>
 
+static uint8_t get_usb_config(config_t * cfg);
 /* Function :
  * Params :
  * Return :
-*/
+ */
 static void init_cfg(config_t *cfg, config_setting_t **root)
 {
+	static uint8_t moved_cfg = 0;
 	config_init(cfg);
 	config_read_file(cfg, CFG_FILE);
 
+
+	if(moved_cfg == 0 && get_usb_config(cfg) == 2)
+	{
+		config_destroy(cfg);
+		config_init(cfg);
+		config_read_file(cfg, CFG_FILE);
+		moved_cfg = 1;
+	}
+else
+	moved_cfg = 1;
+
 	*root = config_root_setting(cfg);
-}	
+}
+
+static uint8_t get_usb_config(config_t *cfg)
+{
+	DIR* FD;
+	struct dirent* in_file;
+
+	char cmd[100];
+	char path[100];
+
+	char *cfg_path = "PATH_USB_STICK";
+	const char *usb_key_config;
+	config_lookup_string(cfg,cfg_path, &usb_key_config);
+
+	strncpy(path, usb_key_config, 100);
+
+	if (NULL == (FD = opendir(usb_key_config))) 
+	{
+		fprintf(stderr, "Error : Failed to open input directory - ");
+		return 0;
+	}
+
+	while ((in_file = readdir(FD))) 
+	{
+		if (!strcmp(in_file->d_name, CFG_FILE))
+		{
+			strcat(path, CFG_FILE);
+			sprintf(cmd, "/bin/mv %s /home/pi/Surffeol/%s", 
+					path, CFG_FILE);
+			if(system(cmd) == -1)
+			{
+				printf("Error during cp of config file");
+				return 0;
+			}
+			printf("Found a config file in USB, moving it"
+				       	" to current dir\n");
+			return 2;
+		}
+	}
+	closedir(FD);
+	return 1;
+}
+
 /* Function :
  * Params :
  * Return :

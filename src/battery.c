@@ -10,7 +10,6 @@ static void stats(float volt, float min_volt, float max_volt);
 
 typedef struct cleanup_args{
 	FILE * fp;
-	_Atomic uint8_t *alive;
 } cleanup_args;
 
 static void battery_cleanup(void * arg)
@@ -20,7 +19,7 @@ static void battery_cleanup(void * arg)
 	bcm2835_spi_end();
 	end_program = 1;
 	fclose(args->fp);
-	*args->alive = 0;
+	alive[AD_CONVERTER] = 0;
 }
 
 /* Starting point for the thread managing power of the system
@@ -35,9 +34,8 @@ void *battery(void *arg)
 	int32_t i, adc, volt = -1;
 	time_t t;
 
+	alive[AD_CONVERTER] = 1;
 	cleanup_args args;
-	args.alive = arg;
-	*(args.alive) = 1;
 	args.fp = fopen(PATH_VOLT_LOGS, "a+");
 	
 	pthread_cleanup_push(battery_cleanup, (void*) &args);
@@ -80,7 +78,7 @@ void stats(float volt, float min_volt, float max_volt)
 	pthread_t thread;
 	static uint32_t count;
 	static float min, max, sum, sum_square;
-	struct sgf_data data_to_send = {
+	static struct sgf_data data_to_send = {
 		.id = AD_CONVERTER };
 
 	pthread_attr_t attr;
@@ -90,7 +88,7 @@ void stats(float volt, float min_volt, float max_volt)
 
 	static time_t new_cycle;
 	if(!new_cycle)
-		new_cycle = time(NULL);
+		new_cycle = time(NULL) - SGF_SEND_PERIOD + 120;
 
 	if(volt > max)
 		max = volt;
@@ -100,18 +98,21 @@ void stats(float volt, float min_volt, float max_volt)
 	sum_square += volt;
 	count++;
 
-	if(difftime(time(NULL), new_cycle) > SGF_SEND_PERIOD/10)
+	if(difftime(time(NULL), new_cycle) > SGF_SEND_PERIOD)
 	{
+		data_to_send.id = AD_CONVERTER;
 		data_to_send.min = min;
 		data_to_send.max = max;
-		data_to_send.mean = (sum/count - min_volt) /
+		data_to_send.mean = 255 * (sum/count - min_volt) /
 			(max_volt - min_volt);
 		data_to_send.std_dev = sqrt(sum_square/count - 
 				data_to_send.mean*data_to_send.mean);
-		pthread_create(&thread, &attr, send_sigfox, (void*) &data_to_send);
+		if(alive[SGF] == 1)
+			pthread_create(&thread, &attr, send_sigfox, (void*) &data_to_send);
 		sum = 0;
 		sum_square = 0;
 		count = 0;
+		new_cycle = time(NULL);
 	}
 
 	pthread_attr_destroy(&attr);
@@ -163,9 +164,10 @@ static uint8_t check_battery(int32_t volt)
 
 	//If voltage is less than fixed threshold or acq_time has been reached,
 	//save config and shutdown the raspberry pi
-	if (volt/1000000 < threshold
+	if ((volt/1000000.0) < threshold
 			|| difftime(time(NULL), start_time) > value[ACQ_TIME])
 	{
+		printf("Difference entre les deux : %f\n", threshold - (volt/1000000));
 		char *str[2] = {"ACQ_TIME", "LAST_DISCHARGE"};
 		double tmp_value[2];
 

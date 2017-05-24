@@ -159,7 +159,6 @@ struct acq_cleanup_args{
 	pthread_t *stats_thread;
 	struct data_acq *buffer;
 	int16_t **data_to_free;
-	_Atomic uint8_t *alive;
 };
 
 struct stats_struct{
