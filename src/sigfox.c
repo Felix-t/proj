@@ -302,12 +302,11 @@ static uint8_t build_message(uint8_t msg[12], uint32_t t, float val1, float val2
 		identity id, uint8_t msg_type)
 {
 	printf("Build message ; ID = %i\n", id);
-	//uint8_t tmp, i;
 	static uint8_t power = 0;
 
 	// We need to save the battery info to embed it into the other messages
 	// val1 of msg_type 2 is the relative mean, which is what we're after 
-	// Battery information (min max std_dev) is ont send through sigfox
+	// Battery information (min max std_dev) is not send through sigfox
 	if(id == AD_CONVERTER && msg_type == 1)
 	{
 		power = (uint8_t) val1;
@@ -317,30 +316,16 @@ static uint8_t build_message(uint8_t msg[12], uint32_t t, float val1, float val2
 	else if (id == AD_CONVERTER)
 		return 0;
 
+	//Time is always inferior to 12h = 43200 : coded on only two bytes
+ 	//Because of endianess, the least significant bytes are written first.
+ 	// The last 2 bytes of the uint32_t time should then be 0
+	memcpy(&msg[0], &t, 4); 
 
-	// Construct the 12 bytes message sent with sigfox
-	memcpy(&msg[0], &t, 4);  //TIME on 3 bytes
-	//@TODO : a cause de little endian :
-/*
-	for(i=0;i<2;i++)
-	{
-		tmp = msg[i];
-		msg[i] = msg[3-i];
-		msg[3-i] = tmp;
-	
-	msg[2] = msg[2] << 7;
-	msg[2] |= power >> 1;
+	//Write power in the third byte
+	msg[2] = power;
 
-	//alive, id, type of msg :
-	/*
-	msg[3] |= (alive[0] << 6);
-	if(LSM9DS0_ENABLE)
-		msg[3] |= (alive[1] << 5);
-	if(WLX2_ENABLE)
-		msg[3]|= (alive[2] << 4);
-	*/
-	msg[2] |= power;
-	msg[3] |= (id << 1);
+	// Write message id and type in byte 4.
+	msg[3] = (id << 1);
 	msg[3] |= msg_type;
 
 	memcpy(&msg[4], &val1, 4);

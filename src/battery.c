@@ -103,7 +103,7 @@ void stats(float volt, float min_volt, float max_volt)
 		data_to_send.id = AD_CONVERTER;
 		data_to_send.min = min;
 		data_to_send.max = max;
-		data_to_send.mean = 255 * (sum/count - min_volt) /
+		data_to_send.mean = 255 * ( sum/((float)count) - min_volt) /
 			(max_volt - min_volt);
 		data_to_send.std_dev = sqrt(sum_square/count - 
 				data_to_send.mean*data_to_send.mean);
@@ -113,6 +113,8 @@ void stats(float volt, float min_volt, float max_volt)
 		sum_square = 0;
 		count = 0;
 		new_cycle = time(NULL);
+		min = 16000.0;
+		max = -16000.0;
 	}
 
 	pthread_attr_destroy(&attr);
@@ -154,13 +156,15 @@ static uint8_t check_battery(int32_t volt)
 		printf("Value threshold : %f\n", threshold);
 	}
 
+	
 	// Update configuration MAX_VALUE if actual voltage is >	
-	else if (volt/1000000 > value[MAX_VOLT]) 
+/*	else if (volt/1000000.0 > value[MAX_VOLT]) 
 	{
 		value[MAX_VOLT] = (double) volt/1000000;
 		char *str[1] = {"MAX_VOLT"};
 		set_cfg(str, &value[MAX_VOLT], 1); 
 	}
+*/
 
 	//If voltage is less than fixed threshold or acq_time has been reached,
 	//save config and shutdown the raspberry pi
@@ -184,7 +188,7 @@ static uint8_t check_battery(int32_t volt)
 		return 0;
 	}
 
-	stats(volt / 1000000, value[MIN_VOLT], value[MAX_VOLT]);
+	stats(volt / 1000000.0, value[MIN_VOLT], value[MAX_VOLT]);
 	return 1;
 }
 

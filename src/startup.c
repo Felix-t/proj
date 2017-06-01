@@ -178,7 +178,6 @@ int  main()
 				}
 			}
 		}
-		printf("Adresse &alive[SGF] : %p\t valeur alive[SGF] : %i\n", &alive[SGF], alive[SGF]);
 		//Continue even if sigfox failed : non critical
 		if(!bcm2835_i2c_begin())
 			printf("i2c initialization failed\n");
@@ -204,7 +203,7 @@ int  main()
 	free(threads);
 	if(!move_logs() || !archive_data())
 		return 0;	
-	if(SHUTDOWN && !program_shutdown(5))
+	if(SHUTDOWN && !program_shutdown(3))
 		return 0;
 	bcm2835_close();
 	return 0;

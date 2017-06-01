@@ -568,7 +568,6 @@ void * stats(void * arg)
 						sum_square_sgf[i][j] = 0;
 						min[i][j] = 16000.0;
 						max[i][j] = -16000.0;
-						printf("Adresse &alive[SGF] : %p\t valeur alive[SGF] : %i\n", &alive[SGF], alive[SGF]);
 						if(alive[SGF] == 1)
 							pthread_create(&threads[3*i + j], &attr,
 								send_sigfox,
