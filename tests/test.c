@@ -14,12 +14,12 @@ static uint8_t set_blocking (int fd, int should_block);
 int main()
 {
 	sleep(10);
-	int i, u = 1;
+	int i = 0, u = 1, j = 0;
 
-	FILE *fp = fopen("log_test", "a");
+	FILE *fp = fopen("log_tests", "a");
 
 	char *portname = "/dev/ttyUSB0";
-	uint8_t in_messages[100];
+	uint8_t in_messages[500];
 	uint8_t out_messages[9][12] = {
 		{0,1,2,3,4,5,6,7,8,9,10,11},
 		{'+','+','+'},
@@ -32,41 +32,38 @@ int main()
 		{0,1,2,3,4,5,6,7,8,9,10,11}};
 
 	int fd = open (portname, O_RDWR | O_NOCTTY | O_SYNC);
-	set_interface_attribs (fd, B19200, 0);  // set speed to 115,200 bps, 8n1 (no parity)
+	set_interface_attribs (fd, B9600, 0);  // set speed to 115,200 bps, 8n1 (no parity)
 	set_blocking (fd, 0);                // set no blocking
 	
-	write(fd, out_messages[0], 12);
-	sleep(30);
-	printf("Message 1 sent, config :\n");
-	write(fd, out_messages[1], 3);
-	sleep(2);
-	write(fd, out_messages[2], 10);
-	sleep(2);
-	write(fd, out_messages[3], 4);
-	sleep(2);
-	printf("Config done, trying to send message 2:\n");
-	write(fd, out_messages[4], 12);
-	sleep(60);
-	//while(u != 0)
-	//{
-		u = read(fd, in_messages, 100);
+	char * str = "$PMTK300,1000,0,0,0,0*1C\r\n";
+	write(fd, str, strlen(str));
+	str = "$PMTK220,1000*1F\r\n";
+	write(fd, str, strlen(str));
+	str = "$PMTK314,0,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0*28";
+	write(fd, str, strlen(str));
+	str = "$PMTK313,1*2E\r\n";
+	write(fd, str, strlen(str));
+	str = "$PMTK301,2*2E\r\n";
+	write(fd, str, strlen(str));
+	sleep(8);
+	//set_interface_attribs (fd, B38400, 0);  // set speed to 115,200 bps, 8n1 (no parity)
+   struct timespec tt = {
+               .tv_sec = 0,        /* seconds */
+               .tv_nsec = 500000000       /* nanoseconds */
+           };
+
+	while(j < 200)
+	{
+		u = read(fd, in_messages, 500);
 
 		for(i=0;i<u;i++)
-			fprintf(fp, "i : %i,val : %hhx\t", i, in_messages[i]);
-		fprintf(fp, "\n");
-	//}
-	fclose(fp);
-	printf("Message 2 sent, config :\n");
-	write(fd, out_messages[5], 3);
-	sleep(2);
-	write(fd, out_messages[6], 10);
-	sleep(2);
-	write(fd, out_messages[7], 4);
-	sleep(30);
-	printf("Config done, trying to send message received :\n");
-	write(fd, &in_messages[u-8], 8);
-
+			fprintf(fp, "%c", in_messages[i]);
+		nanosleep(&tt, NULL);
+		j++;
+	}
 	printf("All out_messages sent\n");
+	fclose(fp);
+	close (fd);
 }
 
 
