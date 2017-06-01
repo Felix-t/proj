@@ -168,7 +168,7 @@ int  main()
 			printf("Sigfox thread creation failed\n");
 		else if(SGF_ENABLE)
 		{
-			while(alive[SGF] != 1 && j < DOWNLINK_TIMEOUT)
+			while(alive[SGF] != 1 && j < DOWNLINK_TIMEOUT*2)
 			{		sleep(1);
 				j++;
 				if(alive[SGF] == 2)
