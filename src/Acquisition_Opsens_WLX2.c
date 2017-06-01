@@ -858,7 +858,6 @@ static void stats(struct stUDPSendMeasureType_t *ch1,
 			else
 				data_to_send[i].id = WLX2_CH2;
 
-		printf("Adresse &alive[SGF] : %p\t valeur alive[SGF] : %i\n", &alive[SGF], alive[SGF]);
 			if(alive[SGF] == 1)
 				pthread_create(&th[i], &attr, send_sigfox,
 						(void*) &data_to_send[i]);
