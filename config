@@ -4,6 +4,7 @@ MIN_VOLT = 4.95;
 TRESHOLD = 0.5;
 LAST_DISCHARGE = 0.1;
 PATH_LSM9DS0_DATA = "Data/LSM9DS0/";
+PATH_GPS_DATA = "Data/GPS/";
 PATH_USB_STICK = "/media/pi/Lexar/";
 nom_projet = "SURFFEOL";
 nom_fichier_sauvegarde = "data_WLX2";

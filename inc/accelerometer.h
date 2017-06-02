@@ -132,7 +132,6 @@
 #define INTERVAL_CALC_SCALE 	10 //seconds
 #define NB_MEASURES_INTERVAL	QUEUE_SIZE*INTERVAL_CALC_SCALE
 
-#define SIZE_MAX_FILE 		5000
 
 enum {X, Y, Z};
 enum instrument {ACC,GYR,MAG};

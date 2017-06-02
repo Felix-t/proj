@@ -28,8 +28,8 @@ static void init_cfg(config_t *cfg, config_setting_t **root)
 		config_read_file(cfg, CFG_FILE);
 		moved_cfg = 1;
 	}
-else
-	moved_cfg = 1;
+	else
+		moved_cfg = 1;
 
 	*root = config_root_setting(cfg);
 }
@@ -50,7 +50,7 @@ static uint8_t get_usb_config(config_t *cfg)
 
 	if (NULL == (FD = opendir(usb_key_config))) 
 	{
-		fprintf(stderr, "Error : Failed to open input directory - ");
+		fprintf(stderr, "Error : Failed to open USB - \n");
 		return 0;
 	}
 
@@ -63,7 +63,7 @@ static uint8_t get_usb_config(config_t *cfg)
 					path, CFG_FILE);
 			if(system(cmd) == -1)
 			{
-				printf("Error during cp of config file");
+				printf("Error during cp of config file\n");
 				return 0;
 			}
 			printf("Found a config file in USB, moving it"

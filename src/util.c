@@ -348,7 +348,7 @@ static uint8_t delete_data()
 {
 	pid_t pid = fork();
 	if (pid == 0) { /* child */
-		execl("/bin/rm", "/bin/rm", "-r", "Data/Data", "Data/logs", "Data/LSM9DS0", (char *)0); //@TODO : remplacer Data/ par const ou config
+		execl("/bin/rm", "/bin/rm", "-r", "Data/Data", "Data/logs", "Data/GPS", "Data/LSM9DS0", (char *)0); //@TODO : remplacer Data/ par const ou config
 		exit(0);
 	}
 	else if (pid < 0) {

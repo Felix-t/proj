@@ -5,7 +5,7 @@
 #define MAX_NB_MSG 140 //daily max number of messages that can be sent with sgf
 #define DOWNLINK_TIMEOUT 60
 
-#define TTY "/dev/ttyUSB0"
+#define SGF_PORT "/dev/SGF"
 
 //TODO :  fichier sigfox
 //REAL : #define SGF_SEND_PERIOD 24*3600/MAX_NB_MSG // 140 messages/jour : 3600*24/140

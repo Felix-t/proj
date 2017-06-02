@@ -1,6 +1,7 @@
 #include "headers.h"
 #include "sigfox.h"
 #include "cfg.h"
+#include "serial.h"
 #include <termios.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -8,69 +9,8 @@
 static uint8_t build_message(uint8_t msg[12], uint32_t t, float val1, float val2, 
 		identity id, uint8_t msg_type);
 static time_t get_ref_time();
-static uint8_t set_interface_attribs (int fd, int speed, int parity);
-static uint8_t set_blocking (int fd, int should_block);
 static void parse_downlink(uint8_t *msg_received);
 static void receive_downlink(int fd, uint8_t *msg_received);
-
-
-static uint8_t set_interface_attribs (int fd, int speed, int parity)
-{
-        struct termios tty;
-        memset (&tty, 0, sizeof tty);
-        if (tcgetattr (fd, &tty) != 0)
-        {
-                printf("error %d from tcgetattr", errno);
-                return -1;
-        }
-
-        cfsetospeed (&tty, speed);
-        cfsetispeed (&tty, speed);
-
-        tty.c_cflag = (tty.c_cflag & ~CSIZE) | CS8;     // 8-bit chars
-        // disable IGNBRK for mismatched speed tests; otherwise receive break
-        // as \000 chars
-        tty.c_iflag &= ~IGNBRK;         // disable break processing
-        tty.c_lflag = 0;                // no signaling chars, no echo,
-                                        // no canonical processing
-        tty.c_oflag = 0;                // no remapping, no delays
-        tty.c_cc[VMIN]  = 0;            // read doesn't block
-        tty.c_cc[VTIME] = 5;            // 0.5 seconds read timeout
-
-        tty.c_iflag &= ~(IXON | IXOFF | IXANY); // shut off xon/xoff ctrl
-
-        tty.c_cflag |= (CLOCAL | CREAD);// ignore modem controls,
-                                        // enable reading
-        tty.c_cflag &= ~(PARENB | PARODD);      // shut off parity
-        tty.c_cflag |= parity;
-        tty.c_cflag &= ~CSTOPB;
-        tty.c_cflag &= ~CRTSCTS;
-
-        if (tcsetattr (fd, TCSANOW, &tty) != 0)
-        {
-                printf("error %d from tcsetattr", errno);
-                return 0;
-        }
-        return 1;
-}
-
-static uint8_t set_blocking (int fd, int should_block)
-{
-        struct termios tty;
-        memset (&tty, 0, sizeof tty);
-        if (tcgetattr (fd, &tty) != 0)
-        {
-                printf("error %d from tggetattr", errno);
-                return 0;
-        }
-
-        tty.c_cc[VMIN]  = should_block ? 1 : 0;
-        tty.c_cc[VTIME] = 5;            // 0.5 seconds read timeout
-
-        if (tcsetattr (fd, TCSANOW, &tty) != 0)
-		printf("error %d setting term attributes", errno);
-	return 1;
-}
 
 
 void * send_sigfox(void *args)
@@ -193,7 +133,6 @@ void *sigfox(void* args)
 	printf("Thread sigfox created, id : %li\n",
 			syscall(__NR_gettid));
 
-	char *portname = "/dev/ttyUSB0";
 
 	time_t last_msg = time(NULL);
 	int i, pos_in = 0, pos_out = 0;
@@ -202,11 +141,11 @@ void *sigfox(void* args)
 
 	time_t ref_time = get_ref_time();
 
-	int fd = open (portname, O_RDWR | O_NOCTTY | O_SYNC);
+	int fd = open (SGF_PORT, O_RDWR | O_NOCTTY | O_SYNC);
 	
 	if (fd < 0)
 	{
-		printf("error %d opening %s: %s", errno, portname, strerror (errno));
+		printf("error %d opening %s: %s", errno, SGF_PORT, strerror (errno));
 		alive[SGF] = 2;
 		pthread_exit((void *) 0);
 	}

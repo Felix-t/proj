@@ -28,18 +28,21 @@
 #define LSM9DS0_MAG_ENABLE 0
 #define LSM9DS0_ENABLE 1
 #define WLX2_ENABLE 1
+#define GPS_ENABLE 1
 #define SHUTDOWN 1
 
 
 //#define TEMPUSB "tempUSB/" // for debug purposes
 
-//In seconds, interval between two sets of data sent with sigfox
+//In seconds, minimum interval between two sets of data sent with sigfox
 #define SGF_INTERVAL 600
 
 // Interval of time during which every data has been sent through sigfox network
 // = 2 messages (mean/dev & min/max) per used identity, * SGF_INTERVAL
 #define SGF_SEND_PERIOD SGF_INTERVAL*2*(2*WLX2_ENABLE + 6*LSM9DS0_ENABLE + 3*LSM9DS0_MAG_ENABLE)
 
+// Maximum file size in ko for accelerometer and gps acquisition
+#define SIZE_MAX_FILE 		5000
 
 typedef enum {WLX2_CH1,
 	WLX2_CH2,
@@ -53,7 +56,8 @@ typedef enum {WLX2_CH1,
 	LSM9DS0_MAG_Y,
 	LSM9DS0_MAG_Z,
 	AD_CONVERTER,
-	SGF} identity;
+	SGF,
+	GPS} identity;
 
 
 
