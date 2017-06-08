@@ -177,18 +177,33 @@ int  main()
 
 	// Start battery management
 	//  --> Real battery management
-	//i += start_AD_acq(&threads[i]);
+	i += start_AD_acq(&threads[i]);
 
 	// --> Fake battery management for debugging
-
+	/*
 	if(pthread_create(&threads[i++], NULL, test, NULL)) // To debug
 	{
 		printf("AD thread creation failed\n");
 		end_program = 1;
 	}
+	*/
 
 	sleep(10); // Wait for first battery check
 
+	if(SGF_ENABLE)
+	{
+		i += start_Sigfox(&threads[i]);
+		// Wait for sigfox to init
+		while(alive[SGF] != 1 && j < DOWNLINK_TIMEOUT*2)
+		{		sleep(1);
+			j++;
+			if(alive[SGF] == 2)
+			{
+				printf("Sigfox failed\n");
+				break;
+			}
+		}
+	}
 	if(end_program)
 	{
 		printf("Not enough battery to start program\n");
@@ -196,20 +211,7 @@ int  main()
 	}
 	else
 	{
-		if(SGF_ENABLE)
-		{
-			i += start_Sigfox(&threads[i]);
-			// Wait for sigfox to init
-			while(alive[SGF] != 1 && j < DOWNLINK_TIMEOUT*2)
-			{		sleep(1);
-				j++;
-				if(alive[SGF] == 2)
-				{
-					printf("Sigfox failed\n");
-					break;
-				}
-			}
-		}
+
 
 		if(LSM9DS0_ENABLE)
 			i += start_Accelerometer_acq(&threads[i]);
@@ -231,13 +233,13 @@ int  main()
 	pthread_mutex_destroy(&sgf_msg.mutex);
 	free(threads);
 	free(alive);
-/*
+
 	move_logs();
        	archive_data();
 
 	if(SHUTDOWN)
-		program_shutdown(3);
-*/
+		program_shutdown(10);
+
 	bcm2835_close();
 	return 0;
 } 

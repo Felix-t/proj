@@ -729,13 +729,14 @@ static uint8_t open_new_file(FILE **fp)
 		get_cfg(&path_base, &cfg, 1);
 		if(NULL == (FD = opendir(path_base)))
 		{
-			printf("Can't open directory, try creating it");
+			printf("Creating directory %s ...", path_base);
 			mkdir(path_base, S_IRWXU | S_IRWXG | S_IRWXO);
 			if(NULL == (FD = opendir(path_base)))
 			{
 				printf("Error opening output directory");
 				return 0;
 			}
+			printf("ok\n");
 		}
 		while ((in_file = readdir(FD))) 
 		{

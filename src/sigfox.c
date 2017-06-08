@@ -75,8 +75,10 @@ static void receive_downlink(int fd, uint8_t *msg_received)
 		for(i=0 ; i<bytes_rcv ; i++)
 		{
 			if(save)
+			{
 				msg_received[bytes_ack++] = rcv_msg[i];
-
+				printf("%hhx\t",  rcv_msg[i]);
+			}
 			else if(i > 1 
 					&& rcv_msg[i-2] == 'A' 
 					&& rcv_msg[i-1] == 'C' 
@@ -85,6 +87,8 @@ static void receive_downlink(int fd, uint8_t *msg_received)
 
 		}
 	}while(bytes_rcv != 0);
+	if(!save)
+		memset(rcv_msg, 0, 8);
 	sleep(2);
 	write(fd, "+++", 3);
 	sleep(2);
@@ -100,9 +104,6 @@ static void parse_downlink(uint8_t *msg_received)
 	float tmp;
 	double cfg_val;
 	switch(msg_received[0]){
-	case 0:
-		strcat(cfg_str, "ACQ_TIME");
-		break;
 	case 1:
 		strcat(cfg_str, "MIN_VOLT");
 		break;
@@ -118,12 +119,17 @@ static void parse_downlink(uint8_t *msg_received)
 	case 5:
 		strcat(cfg_str, "zeros");
 		break;
-	default:
+	case 6:
 		strcat(cfg_str, "ACQ_TIME");
+		break;
+	default:
+		strcat(cfg_str, "");
+		return;
 		break;
 	}
 	memcpy(&tmp, &msg_received[1], 4);
 	cfg_val = tmp;
+	printf("Changing config %s to %f\n", cfg_str, cfg_val);
 	set_cfg((char **) &cfg_str, &cfg_val, 1);
 
 }

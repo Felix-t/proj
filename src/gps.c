@@ -28,13 +28,14 @@ static uint8_t open_new_file(FILE **fp)
 		get_cfg(&path_base, &cfg, 1);
 		if(NULL == (FD = opendir(path_base)))
 		{
-			printf("Can't open directory, try creating it");
+			printf("Creating directory %s ...", path_base);
 			mkdir(path_base, S_IRWXU | S_IRWXG | S_IRWXO);
 			if(NULL == (FD = opendir(path_base)))
 			{
-				printf("Error opening output directory");
+				printf("Error opening output directory\n");
 				return 0;
 			}
+			printf("ok\n");
 		}
 		while ((in_file = readdir(FD))) 
 		{
@@ -89,8 +90,15 @@ void *gps(void * args)
 	write(fd, str, strlen(str));
 	str = "$PMTK220,1000*1F\r\n";
 	write(fd, str, strlen(str));
+
+	// Uncomment to only get minimal coordinates information (GPGGA, GPRMC)
+	/*
 	str = "$PMTK314,0,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0*28";
 	write(fd, str, strlen(str));
+	*/
+	str = "$PMTK314,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0*28";
+	write(fd, str, strlen(str));
+
 	str = "$PMTK313,1*2E\r\n";
 	write(fd, str, strlen(str));
 	str = "$PMTK301,2*2E\r\n";

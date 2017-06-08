@@ -131,6 +131,8 @@ void set_cfg(char **str, double *values, int32_t str_nb)
 	{
 		path = config_setting_add(setting_root, str[i], CONFIG_TYPE_FLOAT);
 		path = config_lookup(&config, str[i]);
+		if(config_setting_is_array(path) == CONFIG_TRUE)
+			config_setting_set_float_elem(path, 0, values[i]);
 		config_setting_set_float(path, values[i]);
 	}	
 	config_write_file(&config, CFG_FILE);
