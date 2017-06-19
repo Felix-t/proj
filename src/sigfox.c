@@ -35,8 +35,6 @@ void * send_sigfox(void *args)
 			write = 0;
 		}
 		pthread_mutex_unlock(&sgf_msg.mutex);
-		printf("loop :  %li\n",
-			syscall(__NR_gettid));
 		sleep(2);
 	}
 	printf("Thread send data exited\n");
@@ -74,21 +72,24 @@ static void receive_downlink(int fd, uint8_t *msg_received)
 
 		for(i=0 ; i<bytes_rcv ; i++)
 		{
-			if(save)
-			{
+			if(save && bytes_ack < 8)
 				msg_received[bytes_ack++] = rcv_msg[i];
-				printf("%hhx\t",  rcv_msg[i]);
-			}
-			else if(i > 1 
-					&& rcv_msg[i-2] == 'A' 
-					&& rcv_msg[i-1] == 'C' 
-					&& rcv_msg[i] == 'K')
-				save = 1;
 
+			else if(i > 1 
+					&& rcv_msg[i-8] == 'T' 
+					&& rcv_msg[i-7] == ' ' 
+					&& rcv_msg[i-6] == 'S' 
+					&& rcv_msg[i-5] == 'E' 
+					&& rcv_msg[i-4] == 'T' 
+					&& rcv_msg[i-3] == 'U' 
+					&& rcv_msg[i-2] == 'P' )
+					//&& rcv_msg[i-1] == '\r' 
+					//&& rcv_msg[i] == '\n')
+				save = 1;
 		}
 	}while(bytes_rcv != 0);
 	if(!save)
-		memset(rcv_msg, 0, 8);
+		memset(msg_received, 0, 8);
 	sleep(2);
 	write(fd, "+++", 3);
 	sleep(2);
@@ -96,41 +97,57 @@ static void receive_downlink(int fd, uint8_t *msg_received)
 	sleep(2);
 	write(fd, "ATQ\n", 4);
 	sleep(2);
+	char tmp[12];
+	sprintf(tmp, "recu:%hhxZ", msg_received[0]);
+	write(fd, tmp, 7);
 }
 
 static void parse_downlink(uint8_t *msg_received)
 {
-	char cfg_str[100] = "";
-	float tmp;
+	char *cfg_str[1];
+	cfg_str[0] = malloc(100);
+	uint32_t tmp;
+	float tmp_float;
 	double cfg_val;
 	switch(msg_received[0]){
 	case 1:
-		strcat(cfg_str, "MIN_VOLT");
+		printf("Case 1\n");
+		strcpy(cfg_str[0], "MIN_VOLT");
 		break;
 	case 2:
-		strcat(cfg_str, "MIN_VOLT");
+		printf("Case 2\n");
+		strcpy(cfg_str[0], "MAX_VOLT");
 		break;
 	case 3:
-		strcat(cfg_str, "THRESHOLD");
+		printf("Case 3\n");
+		strcpy(cfg_str[0], "THRESHOLD");
 		break;
 	case 4:
-		strcat(cfg_str, "freq_echantillonnage");
+		printf("Case 4\n");
+		strcpy(cfg_str[0], "freq_echantillonnage");
 		break;
 	case 5:
-		strcat(cfg_str, "zeros");
+		printf("Case 5\n");
+		strcpy(cfg_str[0], "zeros");
 		break;
 	case 6:
-		strcat(cfg_str, "ACQ_TIME");
+		printf("Case 6\n");
+		strcpy(cfg_str[0], "ACQ_TIME");
 		break;
 	default:
-		strcat(cfg_str, "");
+		strcpy(cfg_str[0], "");
 		return;
 		break;
 	}
-	memcpy(&tmp, &msg_received[1], 4);
-	cfg_val = tmp;
-	printf("Changing config %s to %f\n", cfg_str, cfg_val);
-	set_cfg((char **) &cfg_str, &cfg_val, 1);
+	tmp = (msg_received[1] << 24)
+		| (msg_received[2] << 16)
+		| (msg_received[3] << 8)
+		| msg_received[4];
+	memcpy(&tmp_float, &tmp, 4);
+	cfg_val = tmp_float;
+	printf("Changing config %s to %f\n", cfg_str[0], cfg_val);
+	set_cfg(cfg_str, &cfg_val, 1);
+	free(cfg_str[0]);
 
 }
 
@@ -179,6 +196,7 @@ void *sigfox(void* args)
 	// @TODO : receive downlink message
 	uint8_t msg_downlink[8];
 	receive_downlink(fd, msg_downlink);
+	// @TODO : remove, only for testing
 	parse_downlink(msg_downlink);
 
 	alive[SGF] = 1;

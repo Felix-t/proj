@@ -137,10 +137,10 @@ static void *test()
 		.std_dev = 5,
 		.mean = 5};
 
-	if(alive[SGF])
-		pthread_create(&thread, &attr, send_sigfox, (void *) &data_to_send);
-	for(i = 0; i < 2;i++)
+	for(i = 0; i < 5;i++)
 	{	
+		if(alive[SGF])
+			pthread_create(&thread, &attr, send_sigfox, (void *) &data_to_send);
 		get_cpu_usage();
 		get_temp();
 		sleep(60);
@@ -154,7 +154,7 @@ static void *test()
 
 int  main()
 {	
-	sleep(3);
+	sleep(10);
 
 	printf("Main thread ID : %li\n", syscall(__NR_gettid));
 
@@ -175,21 +175,6 @@ int  main()
 
 	pthread_mutex_init(&sgf_msg.mutex, NULL);
 
-	// Start battery management
-	//  --> Real battery management
-	i += start_AD_acq(&threads[i]);
-
-	// --> Fake battery management for debugging
-	/*
-	if(pthread_create(&threads[i++], NULL, test, NULL)) // To debug
-	{
-		printf("AD thread creation failed\n");
-		end_program = 1;
-	}
-	*/
-
-	sleep(10); // Wait for first battery check
-
 	if(SGF_ENABLE)
 	{
 		i += start_Sigfox(&threads[i]);
@@ -204,6 +189,22 @@ int  main()
 			}
 		}
 	}
+	// Start battery management
+	//  --> Real battery management
+	i += start_AD_acq(&threads[i]);
+
+	// --> Fake battery management for debugging
+	/*	
+	if(pthread_create(&threads[i++], NULL, test, NULL)) // To debug
+	{
+		printf("AD thread creation failed\n");
+		end_program = 1;
+	}
+	*/
+
+	sleep(10); // Wait for first battery check
+
+	
 	if(end_program)
 	{
 		printf("Not enough battery to start program\n");
@@ -234,11 +235,12 @@ int  main()
 	free(threads);
 	free(alive);
 
+	fflush(NULL);
 	move_logs();
        	archive_data();
 
 	if(SHUTDOWN)
-		program_shutdown(10);
+		program_shutdown(5);
 
 	bcm2835_close();
 	return 0;
