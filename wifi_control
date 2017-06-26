@@ -1,0 +1,18 @@
+#!/bin/bash
+
+
+createAdHocNetwork(){
+echo "Creating ad-hoc network"
+sudo ifconfig wlan0 down
+sudo iwconfig wlan0 mode ad-hoc
+sudo iwconfig wlan0 essid Surffeol
+sudo ifconfig wlan0 10.0.0.2 netmask 255.255.255.0 up
+echo "ad-hoc network created, ip is 10.0.0.2"
+}
+
+sleep 180
+createAdHocNetwork
+sleep 900
+
+sudo ifconfig wlan0 down
+exit 0

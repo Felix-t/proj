@@ -44,6 +44,8 @@
 // Maximum file size in ko for accelerometer and gps acquisition
 #define SIZE_MAX_FILE 		5000
 
+#define NB_IDENTITY 14
+
 typedef enum {WLX2_CH1,
 	WLX2_CH2,
 	LSM9DS0_ACC_X,

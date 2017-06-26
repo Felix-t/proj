@@ -67,9 +67,10 @@ static uint8_t open_new_file(FILE **fp)
 void *gps(void * args)
 {
 	printf("Thread GPS created, id : %li\n",syscall(__NR_gettid));
+	alive[GPS] = 1;
 	int i = 0, u = 1;
 
-	FILE *fp;
+	FILE *fp = NULL;
 	open_new_file(&fp);	
 
 	uint8_t in_messages[500];

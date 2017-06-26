@@ -139,6 +139,7 @@ static uint8_t check_battery(int32_t volt)
 	{
 		time(&start_time);
 	}
+
 	
 	//Initialize value[] with the variables from the configuration file
 	if (value[MAX_VOLT] == 0)
@@ -146,7 +147,8 @@ static uint8_t check_battery(int32_t volt)
 		//Order of string here should be same order as in cfg.h enum
 		char *str[NB_CFG_BATTERY] = {"MAX_VOLT", "MIN_VOLT",
 			"THRESHOLD", "LAST_DISCHARGE","ACQ_TIME"};
-		get_cfg((double *) value, str,  NB_CFG_BATTERY);
+		get_cfg(value, str,  NB_CFG_BATTERY);
+		printf("\tmin : %f\n\tmax : %f\n\tthreshold : %f\n", value[MIN_VOLT], value[MAX_VOLT], value[THRESHOLD]);
 		
 		// Uncomment to have duration of acquisition dependent on 
 		// last acquisition :

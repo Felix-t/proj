@@ -1,0 +1,15 @@
+[Unit]
+Description=Service to monitor surffeol acquisition
+Wants=wittypi.service
+
+[Service]
+Restart=always
+RestartSec=1500
+Type=idle
+WorkingDirectory=/home/pi/Surffeol/
+ExecStart=/home/pi/Surffeol/bin/acq_surffeol &
+StandardOutput=journal
+
+[Install]
+WantedBy=multi-user.target
+

@@ -317,6 +317,7 @@ int Envoi_command(struct parametres_connexion *param_connection, const char *com
 	{
 		ok=0; goto fin_Envoi_command;
 	}
+	
 
 	size_cmd=sizeof(struct public_command_scpi)-(_SEND_BUFF_SIZE-cmd.CommandSize);
 	//printf("oooo%s\n",cmd.Client_command);
@@ -530,27 +531,21 @@ int Send_command_and_receive_answer_2(struct parametres_connexion *param_connect
 	};
 
 
-// 	if (!pthread_create(&xthread_Send_command, NULL, thread_Send_command, &param_SC_RA)
-// 		&& !pthread_create (&xthread_Receive_answer, NULL, thread_Receive_answer, &param_SC_RA) 
-// 		&& !pthread_join(xthread_Send_command,NULL)
-//		&& !pthread_join(xthread_Receive_answer,NULL)
-//		&& param_SC_RA.ok_answer*param_SC_RA.ok_command)
-//	{
-//		strcat(answer[0], param_SC_RA.answer[0]);
-//		strcat(answer[1], param_SC_RA.answer[1]);
-// 	}
-//
-// 	param_SC_RA->ok_command = Envoi_command(param_SC_RA->param_connection,
-// 						param_SC_RA->command, 
-// 						param_SC_RA->ok_print);
-// 	sleep(0.1);
-// 	
-//
-//
-//
-//
-//
+ 	if (!pthread_create(&xthread_Send_command, NULL, thread_Send_command, &param_SC_RA)
+ 		&& !pthread_create (&xthread_Receive_answer, NULL, thread_Receive_answer, &param_SC_RA) 
+ 		&& !pthread_join(xthread_Send_command,NULL)
+		&& !pthread_join(xthread_Receive_answer,NULL)
+		&& param_SC_RA.ok_answer*param_SC_RA.ok_command)
+	{
+		strncat(answer[0], param_SC_RA.answer[0], _RECEIVE_BUFF_SIZE);
+		strncat(answer[1], param_SC_RA.answer[1], _RECEIVE_BUFF_SIZE);
+ 	}
 
+ 	sleep(0.1);
+ 	
+
+
+	/*
 	ok=pthread_create (&xthread_Send_command, NULL, thread_Send_command, &param_SC_RA); 
 	if (ok==0)
 	{
@@ -577,12 +572,14 @@ int Send_command_and_receive_answer_2(struct parametres_connexion *param_connect
 	{
 		//memcpy(answer[0],param_SC_RA.answer[0],strlen(param_SC_RA.answer[0])*sizeof(char));
 		//memcpy(answer[1],param_SC_RA.answer[1],strlen(param_SC_RA.answer[1])*sizeof(char));
-		strcat(answer[0],param_SC_RA.answer[0]);
-		strcat(answer[1],param_SC_RA.answer[1]);
+		strncat(answer[0],param_SC_RA.answer[0]);
+		strncat(answer[1],param_SC_RA.answer[1]);
+		printf("\n%s\n%s\n",answer[0], answer[1]); 
 		//printf("answer[0],answer[1] %s %s\n",answer[0],answer[1]);
 		//printf("param_SC_RA.answer[0],param_SC_RA.answer[1] %s %s\n",param_SC_RA.answer[0],param_SC_RA.answer[1]);
 	}
 
+	*/
 	return ok;
 
 }

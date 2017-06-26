@@ -56,7 +56,7 @@ static time_t get_ref_time()
 static void receive_downlink(int fd, uint8_t *msg_received)
 {
 	uint8_t i,bytes_rcv,  save = 0, bytes_ack = 0;
-	uint8_t rcv_msg[100];
+	uint8_t rcv_msg[100] = {0};
 	write(fd, "+++", 3);
 	sleep(2);
 	write(fd, "ATS000=d0\n", 10);
@@ -75,7 +75,7 @@ static void receive_downlink(int fd, uint8_t *msg_received)
 			if(save && bytes_ack < 8)
 				msg_received[bytes_ack++] = rcv_msg[i];
 
-			else if(i > 1 
+			else if(i > 7 
 					&& rcv_msg[i-8] == 'T' 
 					&& rcv_msg[i-7] == ' ' 
 					&& rcv_msg[i-6] == 'S' 
@@ -156,11 +156,11 @@ void *sigfox(void* args)
 	printf("Thread sigfox created, id : %li\n",
 			syscall(__NR_gettid));
 
-
 	time_t last_msg = time(NULL);
 	int i, pos_in = 0, pos_out = 0;
+	uint8_t local_alive[NB_IDENTITY] = {0};
 	uint32_t t;
-	uint8_t *messages[MAX_NB_MSG + 1];
+	uint8_t *messages[MAX_NB_MSG + 1] = {NULL};
 
 	time_t ref_time = get_ref_time();
 
@@ -194,7 +194,7 @@ void *sigfox(void* args)
 	}
 	
 	// @TODO : receive downlink message
-	uint8_t msg_downlink[8];
+	uint8_t msg_downlink[8] = {0};
 	receive_downlink(fd, msg_downlink);
 	// @TODO : remove, only for testing
 	parse_downlink(msg_downlink);
@@ -202,6 +202,8 @@ void *sigfox(void* args)
 	alive[SGF] = 1;
 
 	sgf_msg.write_allowed = 1;
+
+	sleep(60);
 
 	//Stop the loop if end_program is 1, or if too many messages have been
 	// sent through sigfox
@@ -228,6 +230,24 @@ void *sigfox(void* args)
 					sgf_msg.mean, sgf_msg.std_dev,
 					sgf_msg.id, 1);
 			sgf_msg.write_allowed = 1;
+		}
+		else if(local_alive[WLX2_CH1] == 0 && alive[WLX2_CH1] == 0)
+		{
+			pos_in += build_message(messages[pos_in], t,
+					0.0, 0.0, WLX2_CH1, 3);
+			local_alive[WLX2_CH1] = 1;
+		}
+		else if(local_alive[LSM9DS0_ACC_X] == 0 && alive[LSM9DS0_ACC_X] == 0)
+		{
+			pos_in += build_message(messages[pos_in], t,
+					0.0, 0.0, LSM9DS0_ACC_X, 3);
+			local_alive[LSM9DS0_ACC_X] = 1;
+		}
+		else if(local_alive[GPS] == 0 && alive[GPS] == 0)
+		{
+			pos_in += build_message(messages[pos_in], t,
+					0.0, 0.0, GPS, 3);
+			local_alive[GPS] = 1;
 		}
 		pthread_mutex_unlock(&sgf_msg.mutex);
 

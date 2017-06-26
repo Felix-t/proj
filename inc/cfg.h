@@ -15,9 +15,9 @@
 #include "util.h"
 
 
-void get_cfg_str(char **values, char **str,int32_t str_nb);
-void get_cfg_double(double *values, char **str, int32_t str_nb);
-void set_cfg(char ** str, double *values, int32_t str_nb);
+uint8_t get_cfg_str(char **values, char **str,int32_t str_nb);
+uint8_t get_cfg_double(double *values, char **str, int32_t str_nb);
+uint8_t set_cfg(char ** str, double *values, int32_t str_nb);
 
 #define get_cfg(_1, ...) _Generic((_1),                                  \
                               double *: get_cfg_double,                          \

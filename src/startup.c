@@ -170,7 +170,7 @@ int  main()
 
 	pthread_t *threads = malloc(nb_threads*sizeof(pthread_t));
 
-	alive = malloc(sizeof(uint8_t) * 14);
+	alive = malloc(sizeof(uint8_t) * NB_IDENTITY);
 	memset(alive, 0, 14);
 
 	pthread_mutex_init(&sgf_msg.mutex, NULL);
@@ -205,6 +205,7 @@ int  main()
 	sleep(10); // Wait for first battery check
 
 	
+	printf("End program : %i\n", end_program);
 	if(end_program)
 	{
 		printf("Not enough battery to start program\n");
@@ -212,6 +213,7 @@ int  main()
 	}
 	else
 	{
+		printf("Mark 2\n");
 
 
 		if(LSM9DS0_ENABLE)
@@ -231,6 +233,7 @@ int  main()
 		pthread_join(threads[--i], NULL);
 	}
 
+		printf("Mark 3\n");
 	pthread_mutex_destroy(&sgf_msg.mutex);
 	free(threads);
 	free(alive);
