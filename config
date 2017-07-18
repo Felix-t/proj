@@ -1,14 +1,14 @@
-ACQ_TIME = 85200.0;
+ACQ_TIME = 84600.0;
 MAX_VOLT = 3.85;
 MIN_VOLT = 3.38;
-TRESHOLD = 0.6;
+THRESHOLD = 0.6;
 LAST_DISCHARGE = -0.001014;
 PATH_LSM9DS0_DATA = "Data/LSM9DS0/";
 PATH_GPS_DATA = "Data/GPS/";
 PATH_USB_STICK = "/media/pi/surffeol/";
 nom_projet = "SURFFEOL";
 nom_fichier_sauvegarde = "data_WLX2";
-taille_max_du_fichier_sauvegarde = 5000.0;
+taille_max_du_fichier_sauvegarde = 50000.0;
 sauvergarde_cle_usb = 1;
 chemin_cle_usb = "/home/pi/Surffeol/Data";
 SMS_alert = 0;
@@ -26,6 +26,6 @@ GFx_jauge :
   channel_1 = [ 0, 2501, 0, 0 ];
   channel_2 = [ 0, 2480, 0, 0 ];
 };
-module_IDN = "Opsens Sol., WLX-2-P2-N-62LCA-V2, SN:32R0078";
+module_IDN = "Opsens Sol.";
 zeros = [0.0 , 0.0];
 USB_SIZE = 120.0;
