@@ -12,6 +12,7 @@ typedef struct cleanup_args{
 	FILE * fp;
 } cleanup_args;
 
+
 static void battery_cleanup(void * arg)
 {
 	struct cleanup_args *args = arg;
@@ -22,10 +23,12 @@ static void battery_cleanup(void * arg)
 	alive[AD_CONVERTER] = 0;
 }
 
-/* Starting point for the thread managing power of the system
- * Use the ADS1256 interface to capture voltage
- * Using the configuration file, decide when to shutdown the raspberry pi 
- * and update the config
+
+/* Thread :
+ *  - Use the ADS1256 interface to capture voltage, keep statistics
+ *  - Depending on the configuration and the voltage, decide when to shutdown
+ *   the raspberry pi 
+ * Param : not used
 */
 void *battery(void *arg)
 {
@@ -53,6 +56,8 @@ void *battery(void *arg)
 		adc = 0;
 		for (i = 0;i< NB_MEASURES; i++)
 		{
+            // Scan() to make the converter update the data,
+            // GetAdc to read the data
 			while((ADS1256_Scan() == 0));
 			adc += (int32_t) (double)ADS1256_GetAdc(CH_NUM)
 			       		/ (double) NB_MEASURES;
@@ -68,12 +73,21 @@ void *battery(void *arg)
 		
 	}while(check_battery(volt));
 	
-//	set_next_startup(100); //@TODO : 100 for testing
 	pthread_cleanup_pop(1);
 	pthread_exit((void *) 1);
 }
 
-void stats(float volt, float min_volt, float max_volt)
+
+/* Function : 
+ *  - Calculates the minimum, maximum, mean and standard 
+ *  deviation of the successive volt values passed.
+ *  - Every SGF_INTERVAL, send these statistics to the sigfox thread, then
+ *  reset them
+ * Params : The measured volt value,
+ *          min_volt and max_volt are the lowest and highest possible voltage 
+ *          These two values are used to calculate the mean in percentage.
+ */
+static void stats(float volt, float min_volt, float max_volt)
 {
 	pthread_t thread;
 	static uint32_t count = 0;
@@ -81,15 +95,14 @@ void stats(float volt, float min_volt, float max_volt)
 	static struct sgf_data data_to_send = {
 		.id = AD_CONVERTER };
 
-	pthread_attr_t attr;
-	pthread_attr_init(&attr);
-	pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
-
-
-	static time_t new_cycle;
+    // Battery data is not sent to sigfox immediately, as the sigfox may not
+    // yet be initialised 
+    // We start sending data 120s after stats() is first called 
+	static time_t new_cycle = 0;
 	if(!new_cycle)
-		new_cycle = time(NULL) - SGF_SEND_PERIOD + 120;
+		new_cycle = time(NULL) - SGF_INTERVAL + 120;
 
+    // Update min, max sum.
 	if(volt > max)
 		max = volt;
 	else if (volt < min)
@@ -98,19 +111,32 @@ void stats(float volt, float min_volt, float max_volt)
 	sum_square += volt;
 	count++;
 
-	if(difftime(time(NULL), new_cycle) > SGF_SEND_PERIOD)
+	if(difftime(time(NULL), new_cycle) > SGF_INTERVAL)
 	{
-		data_to_send.id = AD_CONVERTER;
 		data_to_send.min = min;
 		data_to_send.max = max;
+        
+        // Data to send is a percentage between min_volt and max_volt, 
+        // and cap at 255/255 (100%)
 		data_to_send.mean = 255.0 * (float) ( sum/((float)count) - min_volt) /
 			(float) (max_volt - min_volt);
 		data_to_send.mean = data_to_send.mean > 255.0 ?
 		       	data_to_send.mean : 255.0;
+
 		data_to_send.std_dev = sqrt(sum_square/count - 
 				data_to_send.mean*data_to_send.mean);
-		if(alive[SGF] == 1)
-			pthread_create(&thread, &attr, send_sigfox, (void*) &data_to_send);
+
+        // Attributes to create our threads detached, so that we don't have to 
+        // manually do it
+        pthread_attr_t attr;
+        pthread_attr_init(&attr);
+        pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+        
+        if(alive[SGF] == 1)
+            pthread_create(&thread, &attr, send_sigfox, (void*) &data_to_send);
+
+        pthread_attr_destroy(&attr);
+
 		sum = 0;
 		sum_square = 0;
 		count = 0;
@@ -118,12 +144,12 @@ void stats(float volt, float min_volt, float max_volt)
 		min = 16000.0;
 		max = -16000.0;
 	}
-
-	pthread_attr_destroy(&attr);
 }
 
+
 /*
- * check_battery : Read and update config to decide whether to shutdown or not
+ * Function : Read and update config to decide whether to shutdown the program
+ *          or not
  * Param : The measured voltage
  * Return : 0 if system should be shutdown, 1 otherwise
  */
@@ -132,17 +158,14 @@ static uint8_t check_battery(int32_t volt)
 	static double value[NB_CFG_BATTERY] = {0,0,0,0,0};
 	static int32_t start_volt = 0;
 	static time_t start_time = 0;
-	static double threshold;
+	static double threshold = 0.0;
 
-	if(start_volt == 0)
+	if(!start_volt)
 		start_volt = volt;
 
 	if(!start_time)
-	{
 		time(&start_time);
-	}
 
-	
 	//Initialize value[] with the variables from the configuration file
 	if (value[MAX_VOLT] == 0)
 	{
@@ -150,28 +173,17 @@ static uint8_t check_battery(int32_t volt)
 		char *str[NB_CFG_BATTERY] = {"MAX_VOLT", "MIN_VOLT",
 			"THRESHOLD", "LAST_DISCHARGE","ACQ_TIME"};
 		get_cfg(value, str,  NB_CFG_BATTERY);
-		printf("\tmin : %f\n\tmax : %f\n\tthreshold : %f\n", value[MIN_VOLT], value[MAX_VOLT], value[THRESHOLD]);
-		
-		// Uncomment to have duration of acquisition dependent on 
-		// last acquisition :
-		//set_acq_time(volt, value);
-		threshold = value[MIN_VOLT] + 
+
+        threshold = value[MIN_VOLT] + 
 			(value[MAX_VOLT] - value[MIN_VOLT])*value[THRESHOLD];
-		printf("Value threshold : %f\n", threshold);
+
+        printf("Configuration read in file :\n");
+		printf("\tmin : %f\n\tmax : %f\n\tthreshold : %f\n",
+                value[MIN_VOLT], value[MAX_VOLT], threshold);
 	}
 
-	
-	// Update configuration MAX_VALUE if actual voltage is >	
-/*	else if (volt/1000000.0 > value[MAX_VOLT]) 
-	{
-		value[MAX_VOLT] = (double) volt/1000000;
-		char *str[1] = {"MAX_VOLT"};
-		set_cfg(str, &value[MAX_VOLT], 1); 
-	}
-*/
-
-	//If voltage is less than fixed threshold or acq_time has been reached,
-	//save config and shutdown the raspberry pi
+	// If voltage is less than fixed threshold or acq_time has been reached,
+	// save config and shutdown the raspberry pi
 	if ((volt/1000000.0) < threshold
 			|| difftime(time(NULL), start_time) > value[ACQ_TIME])
 	{
@@ -179,16 +191,11 @@ static uint8_t check_battery(int32_t volt)
 		char *str[2] = {"ACQ_TIME", "LAST_DISCHARGE"};
 		double tmp_value[2];
 
-		// Uncomment and comment next lines to have duration of 
-		// acquisition dependent on last acquisition
-		//tmp_value[0] = difftime(time(NULL), start_time);
 		tmp_value[0] = value[ACQ_TIME];
 
 		tmp_value[1] = (volt - start_volt)/1000000.0;
 		set_cfg(str, tmp_value, 2);
 
-		// Uncomment to schedule next startup
-		//set_next_startup((int32_t) (SEC SINCE 00:00:00));
 		return 0;
 	}
 
@@ -196,29 +203,6 @@ static uint8_t check_battery(int32_t volt)
 	return 1;
 }
 
-
-//@TODO : Check what happens when the program runs 24h
-/* Function : Change how long should the raspberry pi be kept powered depending
- * 		on last acquisition duration and discharge
- * Params : measured voltage, configuration values
-*/
-/*
-static void set_acq_time(int32_t volt, double *value)
-{
-	char *str[1] = {"ACQ_TIME"};
-	double expected_volt = volt/1000000 -
-	       		       value[LAST_DISCHARGE] - 
-			       value[THRESHOLD]*value[MAX_VOLT];
-	if(expected_volt > 0)
-		value[ACQ_TIME] = value[ACQ_TIME] * 1.1;
-	else if(expected_volt <  0)
-		value[ACQ_TIME] = value[ACQ_TIME] * 0.9;
-	else if(expected_volt < -2)  	//@TODO : 2 placeholder for hard cap
-		value[ACQ_TIME] = value[ACQ_TIME] * 1.1;
-
-	set_cfg(str, &value[ACQ_TIME], 1);
-}
-*/
 
 /* Function : Setup the options for SPI communications, and start scanning 
  * 		the analog board
@@ -249,3 +233,28 @@ static uint8_t ad_board_setup()
 
 	return 1;	
 }
+
+
+/* Function : Change how long should the raspberry pi be kept powered depending
+ * 		on last acquisition duration and discharge
+ * Params : measured voltage, configuration values
+*/
+/*
+static void set_acq_time(int32_t volt, double *value)
+{
+	char *str[1] = {"ACQ_TIME"};
+	double expected_volt = volt/1000000 -
+	       		       value[LAST_DISCHARGE] - 
+			       value[THRESHOLD]*value[MAX_VOLT];
+	if(expected_volt > 0)
+		value[ACQ_TIME] = value[ACQ_TIME] * 1.1;
+	else if(expected_volt <  0)
+		value[ACQ_TIME] = value[ACQ_TIME] * 0.9;
+	else if(expected_volt < -2)  	//@TODO : 2 placeholder for hard cap
+		value[ACQ_TIME] = value[ACQ_TIME] * 1.1;
+
+	set_cfg(str, &value[ACQ_TIME], 1);
+}
+*/
+
+

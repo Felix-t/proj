@@ -1,0 +1,352 @@
+\documentclass[12pt, a4paper]{article}
+\usepackage[T1]{fontenc}
+\usepackage[latin1]{inputenc}
+\usepackage{listings}
+\usepackage{caption}
+\usepackage{color}
+\usepackage{relsize, etoolbox}
+\AtBeginEnvironment{quote}{\smaller}
+
+\lstset{ % general setup for the package
+    language=C,
+    basicstyle=\small\sffamily,
+    numbers=left,
+    numberstyle=\tiny,
+    frame=tb,
+    tabsize=4,
+    columns=fixed, 
+    showstringspaces=false,
+    showtabs=false,
+    keepspaces,
+    commentstyle=\color{red},
+    keywordstyle=\color{blue}
+}
+\title{Documentation programme acq\_surffeol}
+\author{Felix Tamagny}
+\date{Aout 2017}
+
+\begin{document}
+
+\maketitle
+
+\pagebreak[2]
+\section{Introduction}
+Logiciel d'acquisition du démonstrateur Surffeol
+
+\pagebreak[2]
+\section{Composants}
+\subsection*{Hardware}
+Le logiciel est prévu pour fonctionner sur Raspberry Pi 3 Jessie. Pour utiliser l'ensemble des fonctionnalités, il est nécessaire de connecter le matériel suivant :
+\begin{itemize}
+    \item Une carte Witty Pi 2 pour Raspberry pi, responsable de la synchronisation temporelle via une horloge rtc-1307, et de l'allumage quotidien de la Raspberry. Cette carte utilisant des communications I2c, il n'est pas possible de modifier sa configuration pendant que le programme d'acquisition tourne. Cette carte n'est également pas configurée pour servir d'horloge à la Raspberry pi au démarrage. Pour ces deux raisons, une partie du code fourni par le fabricant de la witty Pi 2 a été modifié. 
+    \item Une carte High precision AD/DA utilisée pour mesurer la tension aux bornes de la batterie, et en déduire le taux de charge restante. Comme la tension maximale d'entrée est de 5V, on utilise un pont diviseur pour réduire la tension fournie par la batterie.
+    \item Une carte USB de communication sigfox basé sur le module ARM-N8-SIGFOX ATIM. Utilise le pilote FTDI pour créer une liaison série. L'envoi de messages s'effectue soit en écrivant directement en mode série sur /dev/ttyUSB0, soit en utilisant des commandes AT (utilisées également pour la configuration).
+    \item Un module Opsens WLX2, responsable de l'acquisition des données de déformation. Ce module est connecté à la raspberry pi via ethernet, et envoie ces données en utilisant le protocole UDP. La raspberry joue le rôle de serveur dhcp et doit assigner une adresse entre 10.0.0.10 et 10.0.0.20 à l'adresse MAC du module (TODO : voir comment changer cette adresse MAC facilement).
+    \item Un Solid State Relay contrôlant l'alimentation du module Opsens, dont le circuit de contrôle est relié aux pins 3,3V et Ground de la Raspberry.
+    \item Une accéléromètre/gyromètre/magnétomètre LSM9DS0 relié via I2C à la Raspberry Pi (3.3V, GND, i2c\_sda, i2c\_sdl)
+    \item Un régulateur de tension pour fournir du 5V à la raspberry Pi à partir de 24/12 V suivant la batterie ; un pont diviseur de tension pour la carte AD/DA qui prend max. 5V en input.
+\end{itemize}
+TODO : Liens pour chaque composant, circuit électrique
+\subsection*{Software}
+Plusieurs librairies et scripts sont nécessaires pour faire fonctionner les différents hardwares.
+\begin{itemize}
+    \item Bcm2835 et wiringPi sont deux librairies utilisées pour gérer les ports gpio de la raspberry. Le code fourni pour piloter les cartes fille nécessitent soit l'une soit l'autre. La librairie bcm2835 est également utilisée pour gérer les ports i2c lors de l'acquisition des données de l'IMU.
+    \item Dnsmasq est un package linux crée un serveur dhcp pour les communications avec le module Opsens. Les fonctionnalités dns du logiciel sont désactivées.
+    \item Libconfig est une librarie C utilisé pour faciliter la manipulation de fichiers de configurations.
+    \item Un ensemble de scripts est fourni par UULab pour faire fonctionner wittyPi. Ces scripts sont lancés au boot par /etc/init.d/wittypi. 
+\end{itemize}
+
+\pagebreak[2]
+\section{Installation}
+TODO : Script d'installation
+Etapes
+\begin{enumerate}
+    \item Git clone https://github.com/Felix-t/proj.git  
+    \item Renommer proj -> Surffeol
+    \item Télécharger http://www.hyperrealm.com/libconfig/libconfig-1.5.tar.gz,
+        \begin{itemize}
+            \item  tar -zxvf dans \textasciitilde
+            \item ./configure
+            \item Make
+            \item Sudo make install
+        \end{itemize}
+    \item Git clone https://github.com/uugear/Witty-Pi-2.git dans \textasciitilde
+        \begin{itemize}
+            \item Changer les permissions si besoin
+            \item Remplacer certains fichiers par ceux présents dans le git du projet pour :
+        \end{itemize}
+    \item Changer le pin utilisé pour commander la LED, pour empêcher conflit avec AD converter.
+    \item Enlever la synchronisation automatique du temps, et la gestion des scripts (via runScript.sh).
+    \item Avoir le rtc chargé quand aucune communication i2c n'est nécessaire
+        \begin{itemize}
+            \item Mettre wittypi dans /etc/init.d pour automatiser la lecture du script et la programmation de witty pi.
+            \item Sudo systemctl disable fake-hwclock (Provoque une corruption de l'horloge rtc au démarrage). Egalement possible de supprimer le programme (sudo apt remove fake-hwclock). 
+            \item Ajouter le rtc au boot : echo "rtc-ds1307" >> /etc/modules
+        \end{itemize}
+    \item Ajouter ces lignes avant exit 0 dans /etc/rc.local :
+        \begin{itemize}
+            \item "ds1307 0x68" > /sys/class/i2c-adapter/i2c-1/new\_device
+            \item sudo hwclock -s
+            \item date
+        \end{itemize}
+    \item Automatiser le lancement du programme en créer un service acq\_surffeol :
+        \begin{itemize}
+            \item cp acq\_surffeol.service lib/systemd/system/
+            \item sudo systemctl enable acq\_surffeol
+            \item sudo systemctl daemon-reload
+        \end{itemize}
+    \item sudo apt install dnsmasq
+        \begin{itemize}
+            \item Modifier dnsmasq.conf avec la bonne adresse MAC si le module Opsens est différent
+            \item cp Surffeol/dnsmasq.conf /etc/conf
+            \item mv /etc/interfaces Surffeol/defaults/
+            \item mv Surffeol/interfaces\_acq /etc/interfaces
+        \end{itemize}
+    \item Les clés USB ne sont pas montés automatiquement lors d'un démarrage de la raspberry en mode console. On modifie /etc/fstab pour monter automatiquement les clés nommées surffeol en ajoutant : 
+\end{enumerate}
+
+
+
+
+
+
+\pagebreak[2]
+\section{Configuration}
+Le programme utilise le fichier conftest pour récupérer les informations nécessaires. Ce fichier comprend :
+\begin{itemize}
+    \item Les chemins vers les dossiers où les données sont enregistrées, soit pendant l'acquisition (PATH\_LSM9DS0 et chemin\_cle\_usb), soit à la fin de l'acquisition après compression.
+    \item Le nom du module WLX2, pour vérification des messages (non nécessaire ?) 
+    \item Les informations quant aux canaux WLX2 : actif?, nom, labels.
+    \item Fréquence d'échantillonnage du module WLX2, qui détermine le nombre de mesures/s.
+    \item Les valeurs d'offset pour chacun des canaux WLX2 : le programme recalcule ces zéros si leurs valeur est [0.0,0.0]
+    \item La durée de l'acquisition
+    \item Les caractéristiques de la batterie : la charge maximale et minimale, et le niveau à partir duquel  le programme s'arrête (en pourcentage, 1 étant max volt enregistré, et 0 min volt). La charge maximale est mise à jour par le programme si la batterie dépasse cette valeur enregistrée.
+\end{itemize}
+Le programme peut également être modifié par le code avant compilation (dans inc/) : 
+\begin{itemize}
+    \item Activation ou non des modules suivants :
+        \begin{itemize}
+            \item Accéléromètre (avec gyromètre)
+            \item Magnétomètre
+            \item Interrogateur Opsens 
+            \item Sigfox
+        \end{itemize}
+    \item Arrêt de la machine à la fin du programme
+    \item Définition de l'intervalle entre deux envois de données via sigfox
+    \item Modification du chemin vers le fichier de configuration
+    \item Modification des noms de fichiers de sauvegarde temporaire et permanente
+    \item Configuration de la gestion de batterie : 
+\end{itemize}
+
+
+\pagebreak[2]
+\section{stats}
+Les modeuls LSM9DS0, WLX2, et battery ont chacun une fonction ``stats()'' fonctionnant sur le même modèle.
+Cette fonction prends en entrée une donnée (accélération, voltage,\ldots), la compare à celles précédentes pour savoir si c'est le max/min de sa série, et est stockée dans une somme pour pouvoir calculer la moyenne et l'écart-type.
+Une horloge propre a chaque fonction stats permet de savoir quand le délai entre deux messages à envoyer a été dépassé. 
+A ce moment, on calcule moyenne et écarts type suivant les formules (@TODO lien formule). Puis le message est envoyé, et les min, max et somme sont remis à MAX, MIN, 0 respectivement -- ou MAX>plus grand nombre atteignable par la mesure(resp. MIN<)
+\section{Fonctionnement}
+Le programme principal crée plusieurs threads chargé des acquisitions, gestion de batterie et de réseau, puis vérifie que ceux-ci ont fonctionnés correctement et exit.
+Le premier thread lancé est toujours le thread de gestion de la batterie, et est suivi d'un délai pour vérifier l'état de la batterie au boot.
+\begin{itemize}
+    \item Thread battery : 
+        \begin{itemize}
+            \item Check régulièrement le voltage de la batterie sur le canal 0 du convertisseur analogue -> digitale.
+            \item Cette vérification se fait en moyennant X mesures du voltage mesuré.
+            \item Si la charge est inférieure au minimum défini en config ou si le temps d'acquisition a dépassé celui défini en config, le programme broadcast la fin du programme aux autres threads.
+            \item Envoi régulier de la charge actuelle au thread gérant sigfox, qui insère cette information dans chacun des messages envoyés sur le réseau.
+            \item Log l'utilisation du CPU dans le dossier logs/
+            \item Après ce délai, si la fin de programme n'a pas été annonce, le programme crée les différents threads défini suivant la config à la compilation.
+        \end{itemize}
+
+    \item Thread sigfox
+        \begin{itemize}
+            \item Initialise la liaison série (via FTDI) avec la clé USB SIGFOX.
+            \item Check régulièrement un espace de mémoire partagé ou est stocké les dernières informations qu'un autre thread souhaite envoyer. Après lecture de cette information,  cette zone mémoire est prête à recevoir d'autres informations d'autres threads (ou du même).
+            \item Cette information contient l'identité du thread qui l'a envoyé, ainsi que les statistiques à envoyer : min, max, moyenne, écart type.
+            \item  A partir de cette information, le thread construit 1 ou plusieurs (12octets max)  messages sigfox à envoyer et les mets sur une pile FIFO.
+            \item Le thread envoie régulièrement un message sur le réseau sigfox via la clé USB ARM LP SF si la pile n'est pas vide.
+            \item @TODO : Insérer un exemple et la structure des messages.
+        \end{itemize}
+
+    \item Thread LSM9DS0
+        \begin{itemize}
+            \item Crée un sous thread pour gérer l'écriture sur fichier des données, et un thread pour effectuer le traitement statistiques des données enregistrées.
+            \item Initialise la librairie bcm2835, i2c, et les registres du LDSM9DS0 pour effectuer l'acquisition. Configure la fréquence ainsi que la sensibilité avec lesquelles les mesures sont faites.
+            \item En fonction de la fréquence configurée, lis via i2c les données sur les registres adéquats. Remplis une file partagée avec les deux sous threads.
+            \item Sous-thread stats
+                \begin{itemize}
+                    \item Mets a jour les minima et maxima en continu. Garde en mémoire la somme de tous les points.
+                    \item Calcule régulièrement les moyennes et écarts type en utilisant les sommes sauvegardées. Avec ces deux statistiques, vérifie si la sensibilité de l'accéléromètre doit être changée et avertit le thread LSM9DS0 si besoin (plus de sensibilité = gamme moins importante de valeurs possibles). 
+                    \item Calcule les moyennes et écarts type des données obtenues pendant l'intervalle de temps défini entre deux envois sigfox. Crée un thread pour envoyer ces données (pour éviter des appels bloquants).
+                    \item  Se termine quand la variable partagée signalant la fin du programme est mise à 1.
+                \end{itemize}
+            \item Sous-thread print
+                \begin{itemize}
+                    \item Initialise répertoire et fichier de sauvegarde s'il reste suffisamment d'espace
+                    \item Récupère les données de la file partagée et les écrits sur un fichier.
+                    \item Check si la taille du fichier n'est pas trop importante, et change de fichier si c'est le cas. (Taille max défini dans le .h)
+                    \item  Se termine quand la variable partagée signalant la fin du programme est mise à 1, et que toutes les données de la file ont été écrites.
+                \end{itemize}
+
+            \item Modifie la sensibilité en modifiant les registres du LSM9DS0 suivant les retours du sous-thread stats
+            \item Se termine quand la variable partagée signalant la fin du programme est mise à 1, que les deux sous threads ont terminées, et que les ressources partagées ont été libérées.
+        \end{itemize}
+\end{itemize}
+
+\pagebreak[2]
+\section{WittyPi}
+
+\subsection{Principe}
+Une des contraintes sur le système est la nécessité de toujours laisser suffisement de batterie pour l'alimentation de la balise @TODOBALISE. En hiver ou suite a des périodes de mauvais temps sur plusieurs jours, il est donc prévu que notre système s'éteigne, puis qu'il se rallume une fois que les panneaux solaires auront suffisament rechargé la batterie. 
+Comme la raspberry ne posséde pas de capacité de reboot programmé, nous avons choisi d'utiliser une carte fille WittyPi 2, qui gère l'accés à l'alimentation de la raspberry pi, et qui permet donc de l'allumer et de l'éteindre via le software. Pour garder le compte du temps écoulé lorsque la raspberry pi est éteinte, cette carte possède sa propre clock, que nous initialisons avant la mise en mer, et sur laquelle notre système se synchronisera à chaque démarrage.
+
+\subsection{Fonctionnement :}
+La carte fille WittyPi communique avec la raspberry Pi via ses GPIO par i2c. Le programme fourni par le constructeur permet de choisir une date, ou une heure de démaragge et shutdown. Pour surffeol, l'heure de démaragge a été fixée a 12h00 tout les jours, tandis que le shutdown est laissé vide, et est executé par le programme acq\_surffeol.
+
+Le logiciel wittyPi n'étant executé qu'au démarrage, un délai a été ajouté au programme principal pour empécher wittyPi de créer des interférences avec la lecture des données de l'acceleromètre/gyromètre (les deux utilisant i2c pour communiquer)
+
+
+\pagebreak[2]
+\section{LSM9DS0}
+
+L'accélération et le vitesse de rotation sont mesurées par une Inertial Measurement Unit (IMU) : la puce LSM9DS0 d'Adafruit. Celle-ci est collée sur le boitier en position horizontale, de manière à avoir une accélération la plus proche possible de 1G sur l'axe Z, et nulle sur tous les autres axes.
+
+\subsection{Fonctionnement:}
+
+La puce LSM9DS0 permet de communiquer soit via SPI soit par i2c. Le convertisseur analogue-digital utilisant déja SPI, nous utilisons i2c pour la carte LSM9DS0, pour accélerer le développement et éviter des problèmes de synchronisation. Sur raspberry Pi les deux choix principaux pour gérer les GPIO sont les librairies wiringPi et bcm2835. Nous utilisons la seconde ici pour gérer les communications i2c.
+La configuration et la récupération de données se fait en écrivant/lisant sur des registres de la carte.
+La carte utilisée propose plusieurs modes de lectures des données pour une fréquence d'échantillonnage donnée : 
+\begin{enumerate}
+    \item Un seul registre est utilisé par instrument et coordonnées. La lecture doit donc se faire à la meme fréquence que la fréquence d'échantillonnage.
+    \item 32 registres sont utilisés par instruments et par coordonnées. Les données peuvent donc être lues par burst à 1/32eme de la fréquence d'échantillonnage.
+    \item Plusieurs registres sont utilisés, et une interruption est lancée quand ceux-ci sont pleins. 
+\end{enumerate}
+Bien que la deuxième solution semble la plus adaptée au logiciel (moins de valeurs perdues en cas de ralentissement, plus de flexibilité, moins d'utilisation du CPU), ces gains restent minimes, tandis que la complexité du programme à développer et maintenir augmente. (Contrainte de temps en début de projet).
+La solution ``basique'' a donc été retenu.
+
+Chaque valeur mesurée par la puce LSM9DS0 est stockée sur la carte dans deux registres contigu de 8 bits, en formant un complément à deux.
+Les différentes précisions par instruments sont précisés dans le tableau : @TODO tableau
+\begin{table}
+    \begin{tabular}{c|c|c|c|}
+        & min & max & Sensibilité\\
+        \hline
+        Valeur lue & & -32768 & 1\\
+        & -1998,848 & 1998,848 &  0,0610mG\\
+        & -1998,848 & 1998,848 &  0,1220mG\\
+        & -1998,848 & 1998,848 &  0,0610mG\\
+        & -1998,848 & 1998,848 &  0,0610mG\\
+        & -1998,848 & 1998,848 &  0,0610mG
+    \end{tabular}
+    \caption{@TODO caption}\label{table:somename}
+\end{table}
+
+Pour optimiser la précision des données, le système essaie de rester au niveau de sensibilité le plus élevé, en modifiant l'échelle de mesure de la carte lorsque les données dépassent ou tombent en dessous d'un certain seuil.
+
+Les données enregistrées sont écrites dans un fichier dont la taille limite a été fixée, et des stats sont effectuées en continu sur les données reçues, pour être transmise via SIGFOX.
+
+\subsection{Code}
+
+Les fichier accelerometre.c et accelerometre.h implémentent à la fois l'aspect ``pilote'' de la carte, et l'algorithme propre à Surffeol.
+Le ``pilote'' correspond aux fonctions de setup et de lecture de données. Ces fonctions nécessitent peu ou pas de changements pour être réutilisées dans d'autres projets utilisant le LSM9DS0 (et utilisant la librairie bcm2835).
+
+\begin{lstlisting}[caption=Interface des fonctions ``pilotes'' de l'IMU]
+/* Function : Change the accelerometer, gyrometer or magnetometer sensitivity and maximum scale by setting the correct registers*/
+uint8_t set_scale(enum instrument inst, scale_config *new_scale);
+
+/* Function : Get the accelerometer, gyrometer and magnetometer data*/
+uint8_t read_all(int16_t **buffer);
+
+/* Function : Query the data registers for instrument inst and fill buffer with
+* the raw int16_t x, y, z values*/
+uint8_t read_data(enum instrument inst, int16_t *buffer);
+
+/* Function : configure the gyrometer for acquisition*/
+uint8_t setup_gyrometer(scale_config *scale);
+
+/* Function : configure the gyrometer for acquisition*/
+uint8_t setup_magnetometer(scale_config *scale);
+
+/* Function : configure the gyrometer for acquisition*/
+uint8_t setup_accelerometer(scale_config *scale);
+\end{lstlisting}
+
+La partie propre à Surffeol comprends les 3 threads lancées par l'application ainsi que le setup des valeurs par défaults. 
+
+\begin{lstlisting}[caption=Interface des fonctions ``surffeol'' de l'IMU]
+/* Function : Configure the LSM9DS0 with defaults scale values*/
+uint8_t setup_all();
+
+/* Thread :
+* 	- Prints the data in the file specified in config (PATH_LSM9DS0_DATA).
+* 	- Change file every SIZE_MAX_FILE kbytes
+*/
+void *print_to_file(void * arg);
+
+/* Thread :
+* 	- Manage the acquisition from the accelerometer, gyrometer and 
+* 	    (if defined as such) magnetometer
+* 	- Setup and config the board, then request and read the data through i2c
+*/
+void *acq_GYR_ACC(void * arg);
+
+/* Thread : 
+* 	- Calculates the mean and standard deviation every INTERVAl_CALC_SCALE 
+* 	seconds, and decides which scale should be used depending
+* 	on these two values (for the accelerometer only).
+*	- Send data to the Sigfox thread
+*/
+void * stats(void * arg);
+\end{lstlisting}
+
+L'application principale lance acq\_GYR\_ACC(), qui initialise le hardware puis lance les deux autres threads. Une fois cette initialisation accompli, il commence à lire la carte LSM9DS0 et rempli la structure partagée correspondante.
+Les deux autres threads lisent cette structures pour écrire les données sur un fichier, ou pour effectuer les calculs statistiques dessus.
+% @TODO : insérer diagramme ici ou en annexe
+
+
+
+
+\section{GPS}
+
+Le système est muni d'un GPS ultimate d'Adafruit, qui nous permet de connaître la position de la bouée avec une précision d'à peu prés 1m50 %(@TODO:link).
+Le gps possède une antenne intégrée, mais la précision étant peu satisfaisante, une antenne extèrieure a été ajoutée.
+
+\subsection{Fonctionnement}
+Le gps est relié à la raspberry par un cable USB/série, et la communication se fait par défault à 9600 baud rate, avec checksum. Une pile est ajouté pour que la carte GPS garde sa configuration entre chaque démarrage, mais cette configuration est dans tout les cas réécrite au lancement du programme d'acquisition.
+La carte ultimate gps d'adafruit fonctionne des que le système est allumé, et envoie des trames NMEA à une fréquence determinée par sa configuration. Les nombre et le type des trames NMEA est configurable. Le programme écrit les suivantes dans un fichier de mesure : 
+\begin{itemize}
+    \item GPGGA : informations de localisations : latitude, longitude, type de ``fix'' (no fix = 0, GPS fix = 1, Differential GPS fix = 2)
+    \item GP %@TODO
+\end{itemize}
+Les fonctions suivantes sont fournies par le GPS mais ne sont pas utilisées :
+\begin{itemize}
+    \item Enable/Disable on command : le gps peut être activé ou éteint en alimentant le pin EN. Dans notes cas, le GPS est allumé en permanence.
+    \item La carte GPS fournit une sortie 3.3V stable.
+    \item Une batterie RTC externe peut être utilisé à la place de l'emplacement sur l'arrière de la carte.
+    \item Une des sorties de la carte indique si une position gps à été trouvée ou non.
+    \item Une sortie pulse toute les secondes, et peut être utilisée pour synchroniser d'autres composants reliés.
+\end{itemize}
+
+\subsection{Code}
+Linux sur la raspberry pi est configuré pour associer tout périphérique utilisant l'interface TTL232R au fichier /dev/GPS. Cette association se fait via le système udev de linux :
+\begin{quote}
+    /etc/udev/rules.d/10-local.rules : \\SUBSYSTEM=="tty", ATTRS{interface}=="TTL232R", SYMLINK+="GPS"
+\end{quote}
+
+Le programme utilise les librairies linux fcntl et termios pour ouvrir la connexion série, écrit la configuration du GPS, puis recopie chaque message reçu dans un fichier.
+Les trames GPGGA sont également parsées régulièrement, et la longitude et latitude envoyées au thread SIGFOX.
+% @TODO Diagramme gps ?
+
+
+\section{Convertisseur Analogique-digital}
+La mesure de la batterie se fait via le convertisseur AD-DA fabriqué par Waveshare.
+La batterie utilisée est une batterie Lithium-Ion de 12V. Une recherche sur ce type de batterie nous a indiqué les valeurs suivantes pour estimer l'état de charge :%@TODO Etat de charge tableau ?
+Le convertisseur utilisé étant limité a 5V, nous utilisons un pont diviseur de tension pour réduire la tension d'alimentation à l'entrée. Cette tension mesurée a ensuite été mappée aux tensions réelles de la batterie en utilisant un générateur. %@TODO : Tableau 3V->12V
+Pour le programme d'acquisition, 100 mesures sont moyennées toute les 30 sec, et la valeur obtenue et comparée aux seuils indiqués en configuration : pour 60\%(par défault), le système doit s'éteindre si la valeur mesurée est infèrieur à @TODO.
+
+Nous utilisons un seul des 8 canaux disponibles, et n'utilisons pas les fonctionnalités Digitale->Analogue.
+\subsection{Code}
+La communication avec la Raspberry pi se fait via SPI. Le code utilisé provient d'un exemple fourni par le constructeur de la carte, qui se base sur la librairie bcm2835 pour raspberry pi.
+Un pourcentage de batterie restante (allant de 0/255 - 0\% a 255/255 - 100\%) est envoyé au thread sigfox toutes les 10 minutes (par défault, corresponds à la fréquence d'envoie des messages sur le réseau sigfox). Ce pourcentage n'est pas relayé directement sur le réseau, mais est embarqué dans les autres messages sur un octet.
+
+\end{document}
