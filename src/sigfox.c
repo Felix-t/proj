@@ -42,9 +42,8 @@ void * send_sigfox(void *args)
 }
 
 
-static time_t get_ref_time()
+static time_t get_ref_time(time_t t)
 {
-	time_t t = time(NULL);
 	struct tm *tmp = localtime(&t);
 	// @TODO : start de la journée ? quelle valeur de réf:
 	tmp->tm_sec = 0;
@@ -162,7 +161,7 @@ void *sigfox(void* args)
 	uint32_t t;
 	uint8_t *messages[MAX_NB_MSG + 1] = {NULL};
 
-	time_t ref_time = get_ref_time();
+	time_t ref_time  = 0;
 
 	int fd = open (SGF_PORT, O_RDWR | O_NOCTTY | O_SYNC);
 	
@@ -216,8 +215,7 @@ void *sigfox(void* args)
 		//if acq thread has finished writing :
 		if(sgf_msg.write_allowed == 0)
 		{
-			if(difftime(sgf_msg.time, ref_time) > 3600*12)
-				ref_time = get_ref_time();
+			ref_time = get_ref_time(sgf_msg.time);
 			t = (uint32_t) difftime(sgf_msg.time, ref_time);
 
 			//Build message min/max
@@ -231,6 +229,8 @@ void *sigfox(void* args)
 					sgf_msg.id, 1);
 			sgf_msg.write_allowed = 1;
 		}
+		// Check if any thread stopped working. local_alive is set to 1
+		// if the failure of a thread has already been reported
 		else if(local_alive[WLX2_CH1] == 0 && alive[WLX2_CH1] == 0)
 		{
 			pos_in += build_message(messages[pos_in], t,
@@ -288,7 +288,7 @@ static uint8_t build_message(uint8_t msg[12], uint32_t t, float val1, float val2
 	static uint8_t power = 0;
 
 	// We need to save the battery info to embed it into the other messages
-	// val1 of msg_type 2 is the relative mean, which is what we're after 
+	// This information is in val1 when id is AD_CONVERTER and type is 1
 	// Battery information (min max std_dev) is not send through sigfox
 	if(id == AD_CONVERTER && msg_type == 1)
 	{
@@ -298,6 +298,10 @@ static uint8_t build_message(uint8_t msg[12], uint32_t t, float val1, float val2
 	}
 	else if (id == AD_CONVERTER)
 		return 0;
+	// Only longitude and latitude are sent through sigfox, no mean or dev
+	else if (id == GPS && msg_type == 1)
+		return 0;
+
 
 	//Time is always inferior to 12h = 43200 : coded on only two bytes
  	//Because of endianess, the least significant bytes are written first.
@@ -308,7 +312,7 @@ static uint8_t build_message(uint8_t msg[12], uint32_t t, float val1, float val2
 	msg[2] = power;
 
 	// Write message id and type in byte 4.
-	msg[3] = (id << 1);
+	msg[3] = (id << 2);
 	msg[3] |= msg_type;
 
 	memcpy(&msg[4], &val1, 4);

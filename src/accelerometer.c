@@ -20,7 +20,8 @@ static uint8_t writeReg(uint8_t device_address, uint8_t reg, uint8_t *value, siz
 static uint8_t readReg(uint8_t device_address, uint8_t reg, uint8_t *value, size_t length);
 static uint8_t get_scale(enum instrument inst, scale_config *scale);
 static void acq_cleanup(void *arg);
-static uint8_t change_acc_scale(double *mean, double *std_dev);
+static uint8_t scale_from_val(float x, float y, float z);
+static uint8_t change_acc_scale(float *data, uint8_t cur_scale);
 static inline float calc_mean(double sum, int nb);
 static inline float calc_std_dev(double sum, int nb, float mean);
 static uint8_t get_float_data(int16_t **data, float **buffer, uint8_t new_scale);
@@ -55,64 +56,55 @@ static uint8_t get_float_data(int16_t **data, float **buffer, uint8_t new_scale)
 }
 
 
+static inline uint8_t scale_from_val(float x, float y, float z)
+{
+	uint8_t i = 0;
+	double range[5] = {2000.0,4000.0,6000.0,8000.0,16000.0};
+	for(i = 0; i < 5; i++)
+	{
+		if(x < range[i]*UP_SCALE
+				&& y < range[i]*UP_SCALE
+				&& z < range[i]*UP_SCALE)
+			return i+1;
+	}
+	return 5;
+}
+
 /* Function : Change the scale if the data >80% current scale or  <20% current
  * scale, to prevent/reduce overflow
  * Params :x, y, z are the accelerometer average or values
  * Return : 0 if no change needed, 1 otherwise
  */
-static uint8_t change_acc_scale(double *mean, double *std_dev)
+static uint8_t change_acc_scale(float *data, uint8_t cur_scale)
 {
-	double x = fabs(mean[0]) + std_dev[0];
-	double y = fabs(mean[1]) + std_dev[1];
-	double z = fabs(mean[2]) + std_dev[2];
+	static uint32_t count = DOWNSCALE_TIME*INPUT_DATA_RATE;
+	static uint8_t sc = 0;
+	double x = fabs(data[X]);
+	double y = fabs(data[Y]);
+	double z = fabs(data[Z]);
 
-	double range[5] = {2000.0,4000.0,6000.0,8000.0,16000};
-	uint8_t i;
+	uint8_t tmp = scale_from_val(x,y,z);
+	count++;
 
-	for(i = 0; i < 4; i++)
+	if(tmp > cur_scale)
 	{
-		if(x < range[i]*UP_SCALE 
-				&& y < range[i]*UP_SCALE 
-				&& z < range[i]*UP_SCALE)
-			return i+1;
+		count = 0;
+		sc = 0;
+		return tmp;
 	}
-	return 0;
-	/*
-	get_scale(ACC, &new_scale);
-	switch (new_scale.reg_config)
+	else
 	{
-		case 0:
-			range = 2000.0;
-			break;
-		case 8:
-			range = 4000.0;
-			break;
-		case 16:
-			range = 6000.0;
-			break;
-		case 24:
-			range = 8000.0;
-			break;
-		case 32:
-			range = 16000.0;
-			break;
+		sc = sc > tmp ? sc:tmp;
 	}
-	if(new_scale.reg_config != 32 
-			&& ( x > range*UP_SCALE 
-			|| y > range*UP_SCALE 
-			|| z > range*UP_SCALE))
-		return (new_scale.reg_config >> 3) + 2;
-	else if(new_scale.reg_config != 0 
-			&& x < range*DOWN_SCALE 
-			&& y < range*DOWN_SCALE 
-			&& z < range*DOWN_SCALE)
-		return (new_scale.reg_config >> 3);
-	else 
-		return 0;
+	if(count > DOWNSCALE_TIME*INPUT_DATA_RATE && sc != cur_scale)
+	{
+		tmp = sc;
+		sc = 0;
+		count = 0;
+		return tmp;
+	}
+	return cur_scale;
 
-	set_scale(ACC, &new_scale);
-	*/
-	//return 1;
 }
 
 
@@ -373,7 +365,7 @@ uint8_t setup_accelerometer(scale_config *scale)
 	uint8_t config_reg;
 
 	// continuous update & 50Hz data rate - z,y,x axis enabled, 
-	config_reg = 0b01010111;	       
+	config_reg = 0b01100111;	       
 	if(!writeReg(ACC_ADDRESS, CTRL_REG1_XM, &config_reg, 1))
 	{
 		return 0;
@@ -453,7 +445,7 @@ void * stats(void * arg)
 
 	struct timespec tt = {
 		.tv_sec = 0,
-		.tv_nsec = (long) 18000000.0
+		.tv_nsec = (long) WRITE_DATA_NSEC
 	};
 
 	struct stats_struct *stats_args = (struct stats_struct*) arg;
@@ -472,13 +464,9 @@ void * stats(void * arg)
 
 	double sum[2+LSM9DS0_MAG_ENABLE][3] = {{0}, {0}};
 	double sum_square[2+LSM9DS0_MAG_ENABLE][3] = {{0}, {0}};
-	double sum_sgf[2+LSM9DS0_MAG_ENABLE][3] = {{0}, {0}};
-	double sum_square_sgf[2+LSM9DS0_MAG_ENABLE][3] = {{0}, {0}};
 
 	double min[2+LSM9DS0_MAG_ENABLE][3] = {{0}, {0}};
 	double max[2+LSM9DS0_MAG_ENABLE][3] = {{0}, {0}};
-	double mean[2+LSM9DS0_MAG_ENABLE][3] = {{0}, {0}};
-	double std_dev[2+LSM9DS0_MAG_ENABLE][3] = {{0}, {0}};
 
 	// min can't be initialized to 0, set it to max = 16000,0
 	for(i = 0;i<6+LSM9DS0_MAG_ENABLE*3;i++)
@@ -502,6 +490,8 @@ void * stats(void * arg)
 		if(message_queue[pos].read_allowed == 0)
 			continue;
 
+		count++;
+
 		// Add new data to the sums, actualize min and max if needed
 		for (i = 0; i < 2+LSM9DS0_MAG_ENABLE; i++)
 		{
@@ -517,68 +507,42 @@ void * stats(void * arg)
 			}
 		}
 
-		count++;
+		*new_scale = change_acc_scale(message_queue[pos].data[ACC],
+				*new_scale);
 
-		// Every X measures (interval(sec)*input_rate(measures/sec)) :
-		//   - Calculates the standard deviation and mean for ACC
-		//   - See if the scale needs to be changed
-		//   - Send data to sigfox (when timer is reached)
-		if (count%(NB_MEASURES_INTERVAL) == 0)
+		//Computes total mean and dev on the period
+		//Send these values to sigfox
+		if(difftime(time(NULL), new_cycle) > SGF_SEND_PERIOD)
 		{
-			for(i = 0; i < 3; i++)
+			for(i = 0; i < 2 + LSM9DS0_MAG_ENABLE; i++)
 			{
-				mean[ACC][i] = calc_mean(sum[ACC][i],
-						NB_MEASURES_INTERVAL);
-				std_dev[ACC][i] = calc_std_dev(
-						sum_square[ACC][i], 
-						NB_MEASURES_INTERVAL, 
-						mean[ACC][i]);
-				//adds temp_sums to total_sums and reset them
-				for(j = 0; j < 2 + LSM9DS0_MAG_ENABLE; j++)
+				for(j = 0; j < 3; j++)
 				{
-					sum_sgf[j][i] += sum[j][i];
-					sum_square_sgf[j][i] += sum_square[j][i];
-					sum[j][i] = 0;
-					sum_square[j][i] = 0;
-				}
-			}
-			*new_scale = change_acc_scale(mean[ACC], std_dev[ACC]);
 
-			//Computes total mean and dev on the period
-			//Send these values to sigfox
-			if(difftime(time(NULL), new_cycle) > SGF_SEND_PERIOD)
-			{
-				for(i = 0; i < 2 + LSM9DS0_MAG_ENABLE; i++)
-				{
-					for(j = 0; j < 3; j++)
-					{
-
-						tab_data[i][j].id = 2 + i*3+j;
-						tab_data[i][j].mean = calc_mean(
-								sum_sgf[i][j],
-								count);
-						tab_data[i][j].std_dev = calc_std_dev(
-								sum_square_sgf[i][j], 
-								count, 
-								tab_data[i][j].mean);
-						printf("\t\tEcart type : %f\n", tab_data[i][j].std_dev);
-						tab_data[i][j].min = min[i][j];
-						tab_data[i][j].max = max[i][j];
-						sum_sgf[i][j] = 0;
-						sum_square_sgf[i][j] = 0;
-						min[i][j] = 16000.0;
-						max[i][j] = -16000.0;
-						if(alive[SGF] == 1)
-							pthread_create(&threads[3*i + j], &attr,
+					tab_data[i][j].id = 2 + i*3+j;
+					tab_data[i][j].mean = calc_mean(
+							sum[i][j],
+							count);
+					tab_data[i][j].std_dev = calc_std_dev(
+							sum_square[i][j], 
+							count, 
+							tab_data[i][j].mean);
+					tab_data[i][j].min = min[i][j];
+					tab_data[i][j].max = max[i][j];
+					sum[i][j] = 0;
+					sum_square[i][j] = 0;
+					min[i][j] = 16000.0;
+					max[i][j] = -16000.0;
+					if(alive[SGF] == 1)
+						pthread_create(&threads[3*i + j], &attr,
 								send_sigfox,
 								(void*) &tab_data[i][j]);
-					}
 				}
-				printf("\n\tSent LSM9DS0 stats\n");
-
-				new_cycle = time(NULL);
-				count = 0;
 			}
+			printf("\n\tSent LSM9DS0 stats\n");
+
+			new_cycle = time(NULL);
+			count = 0;
 		}
 		pos = (pos + 1) % QUEUE_SIZE;
 	}
@@ -598,7 +562,7 @@ void *acq_GYR_ACC(void * arg)
 
 	struct timespec tt = {
 		.tv_sec = 0,
-		.tv_nsec = (long) 18000000.0
+		.tv_nsec = (long) WRITE_DATA_NSEC
 	};
 
 	scale_config acc_scale = SCALE_ACC_4G;
@@ -781,7 +745,7 @@ void *print_to_file(void * arg)
 
 	struct timespec tt;
 	tt.tv_sec = 0;
-	tt.tv_nsec = (long) 18000000.0;
+	tt.tv_nsec = (long) WRITE_DATA_NSEC;
 
 	char *time_string = malloc(100*sizeof(char));
 	int size_string = 0;
@@ -816,14 +780,14 @@ void *print_to_file(void * arg)
 		// Construct and print time
 		strcpy(time_string, ctime(&message_queue[pos].acq_time.tv_sec));
 		size_string = strlen(time_string);
-		sprintf(time_string, "%s %uus", 
+		sprintf(time_string, "%s %3uus", 
 				ctime(&message_queue[pos].acq_time.tv_sec),
 				(unsigned int) message_queue[pos].acq_time.tv_usec/1000);
 		time_string[size_string-1] = ' ';
 		fprintf(fp, "%s, ", time_string);
 
 		// Print the data
-		fprintf(fp, "%g, %g, %g, %g, %g, %g", 
+		fprintf(fp, "%8g, %8g, %8g, %8g, %8g, %8g", 
 				message_queue[pos].data[ACC][X],
 				message_queue[pos].data[ACC][Y],
 				message_queue[pos].data[ACC][Z],
@@ -831,7 +795,7 @@ void *print_to_file(void * arg)
 				message_queue[pos].data[GYR][Y],
 				message_queue[pos].data[GYR][Z]);
 		if(LSM9DS0_MAG_ENABLE)
-			fprintf(fp, ",%g,%g,%g,",
+			fprintf(fp, ",%8g,%8g,%8g,",
 					message_queue[pos].data[MAG][X],
 					message_queue[pos].data[MAG][Y],
 					message_queue[pos].data[MAG][Z]);
@@ -846,50 +810,3 @@ void *print_to_file(void * arg)
 	pthread_exit((void *) 1);
 }
 
-
-
-
-
-/*int main()
-  {
-  uint8_t address = 0x1d;
-  uint8_t i;
-  uint8_t data[6] = {200, 150, 12, 178, 85, 252};
-/*	
-get_axes_data(data, buffer, SCALE_MAG_8GAUSS);
-for(i=0;i<3;i++)
-{
-printf("%i\n", buffer[i]);
-}
-*//*
-     bcm2835_init();
-     acq_GYR_ACC();
-/*bcm2835_i2c_begin(); 	
-bcm2835_i2c_setSlaveAddress(address);
-setup_accelerometer();
-setup_gyrometer();
-
-int16_t **buffer; //contains the data from the LSMD9
-//Allocate mem for X Y Z measure for gyro + acc (+mag if defined)
-buffer = malloc(2 * sizeof(int16_t *));
-buffer[0] = malloc(3 * 2 * sizeof(int16_t));
-
-
-for(i = 1; i < 2; i++)
-buffer[i] = buffer[0] + i * 3;
-
-for (i=0;i<200;i++)
-{
-printf("Buffer address main : %i\n", *buffer);
-read_all(buffer);
-//read_accelerometer(buffer[0],0);
-usleep(20);
-printf("ACC : x : %i  y : %i  z : %i\n", buffer[0][0], buffer[0][1], buffer[0][2]);
-//read_gyrometer(buffer[1],0);
-printf("GYR : x : %i  y : %i  z : %i\n", buffer[1][0], buffer[1][1], buffer[1][2]);
-}
-free(buffer[0]);
-free(buffer);
-bcm2835_i2c_end();*/
-//	bcm2835_close();
-//}

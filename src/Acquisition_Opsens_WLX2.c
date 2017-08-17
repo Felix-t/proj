@@ -1,5 +1,6 @@
 #include "Acquisition_Opsens_WLX2.h" 
 #include <math.h>
+#include <float.h>
 #include <sys/time.h>
 
 static void stats(struct stUDPSendMeasureType_t *ch1, 
@@ -799,11 +800,11 @@ void* thread_Enregistrement_data (void* arg)
 static void stats(struct stUDPSendMeasureType_t *ch1,
 		struct stUDPSendMeasureType_t *ch2, int nb_measures)
 {
-	static time_t new_cycle;
+	static time_t new_cycle = 0;
 	int i;
 	static uint32_t nb_data = 0;
-	static double min[NB_CH], max[NB_CH];
-	static double sum[NB_CH], sum_square[NB_CH];
+	static double min[NB_CH] = {0}, max[NB_CH] = {0};
+	static double sum[NB_CH] = {0}, sum_square[NB_CH] = {0};
 	static struct sgf_data data_to_send[2];
 	static pthread_t th[2];
 
@@ -863,6 +864,8 @@ static void stats(struct stUDPSendMeasureType_t *ch1,
 						(void*) &data_to_send[i]);
 			sum[i] = 0;
 			sum_square[i] = 0;
+			min[i] = DBL_MAX;
+			max[i] = -DBL_MAX;
 			printf("Ch%i  --  Moy : %f\t Ecarts : %f\n", i, data_to_send[i].mean,
 					data_to_send[i].std_dev);
 		}

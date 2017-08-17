@@ -213,8 +213,6 @@ int  main()
 	}
 	else
 	{
-		printf("Mark 2\n");
-
 
 		if(LSM9DS0_ENABLE)
 			i += start_Accelerometer_acq(&threads[i]);
@@ -226,14 +224,16 @@ int  main()
 			i += start_GPS_acq(&threads[i]);
 
 		while(!end_program)
+		{
+			fflush(NULL);
 			sleep(5);
+		}
 	}
 	while(i != 0)
 	{
 		pthread_join(threads[--i], NULL);
 	}
 
-		printf("Mark 3\n");
 	pthread_mutex_destroy(&sgf_msg.mutex);
 	free(threads);
 	free(alive);

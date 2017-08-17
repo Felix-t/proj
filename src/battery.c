@@ -3,7 +3,7 @@
 #include <math.h>
 
 static uint8_t ad_board_setup();
-static void set_acq_time(int32_t volt, double *value);
+//static void set_acq_time(int32_t volt, double *value);
 static uint8_t check_battery(int32_t volt);
 static void battery_cleanup(void * arg);
 static void stats(float volt, float min_volt, float max_volt);
@@ -76,8 +76,8 @@ void *battery(void *arg)
 void stats(float volt, float min_volt, float max_volt)
 {
 	pthread_t thread;
-	static uint32_t count;
-	static float min, max, sum, sum_square;
+	static uint32_t count = 0;
+	static float min = 0, max = 0, sum = 0, sum_square = 0;
 	static struct sgf_data data_to_send = {
 		.id = AD_CONVERTER };
 
@@ -103,8 +103,10 @@ void stats(float volt, float min_volt, float max_volt)
 		data_to_send.id = AD_CONVERTER;
 		data_to_send.min = min;
 		data_to_send.max = max;
-		data_to_send.mean = 255 * ( sum/((float)count) - min_volt) /
-			(max_volt - min_volt);
+		data_to_send.mean = 255.0 * (float) ( sum/((float)count) - min_volt) /
+			(float) (max_volt - min_volt);
+		data_to_send.mean = data_to_send.mean > 255.0 ?
+		       	data_to_send.mean : 255.0;
 		data_to_send.std_dev = sqrt(sum_square/count - 
 				data_to_send.mean*data_to_send.mean);
 		if(alive[SGF] == 1)
@@ -190,7 +192,7 @@ static uint8_t check_battery(int32_t volt)
 		return 0;
 	}
 
-	stats(volt / 1000000.0, value[MIN_VOLT], value[MAX_VOLT]);
+	stats(volt / 1000000.0, 3, 4);
 	return 1;
 }
 
@@ -200,6 +202,7 @@ static uint8_t check_battery(int32_t volt)
  * 		on last acquisition duration and discharge
  * Params : measured voltage, configuration values
 */
+/*
 static void set_acq_time(int32_t volt, double *value)
 {
 	char *str[1] = {"ACQ_TIME"};
@@ -215,6 +218,7 @@ static void set_acq_time(int32_t volt, double *value)
 
 	set_cfg(str, &value[ACQ_TIME], 1);
 }
+*/
 
 /* Function : Setup the options for SPI communications, and start scanning 
  * 		the analog board
