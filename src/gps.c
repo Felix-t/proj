@@ -1,12 +1,14 @@
 #include "gps.h"
 #include "serial.h"
 #include "cfg.h"
+#include "sigfox.h"
 #include <termios.h>
 #include "errno.h"
 #include <fcntl.h>
 #include <dirent.h>
 #include <sys/stat.h>
 
+static uint8_t open_new_file(FILE **fp);
 
 static uint8_t open_new_file(FILE **fp)
 {
@@ -73,9 +75,22 @@ void *gps(void * args)
 	FILE *fp = NULL;
 	open_new_file(&fp);	
 
-	uint8_t in_messages[500];
+	char *token = NULL, *keyword = "$GPGGA";
+	uint8_t in_messages[500] = {0};
 
 	int fd = open (GPS_PORT, O_RDWR | O_NOCTTY | O_SYNC);
+
+	pthread_t thread_sgf;
+	pthread_attr_t attr;
+	pthread_attr_init(&attr);
+	pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+	struct sgf_data data = {
+		.min = 0,
+		.max = 0,
+		.id = GPS,
+		.mean = 0,
+		.std_dev = 0,
+	};
 	
 	if (fd < 0)
 	{
@@ -87,9 +102,9 @@ void *gps(void * args)
 	set_interface_attribs (fd, B9600, 0);  // set speed to 115,200 bps, 8n1 (no parity)
 	set_blocking (fd, 0);                // set no blocking
 	
-	char * str = "$PMTK300,1000,0,0,0,0*1C\r\n";
+	char * str = "$PMTK300,5000,0,0,0,0*18\r\n";
 	write(fd, str, strlen(str));
-	str = "$PMTK220,1000*1F\r\n";
+	str = "$PMTK220,5000*1B\r\n";
 	write(fd, str, strlen(str));
 
 	// Uncomment to only get minimal coordinates information (GPGGA, GPRMC)
@@ -97,7 +112,7 @@ void *gps(void * args)
 	str = "$PMTK314,0,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0*28";
 	write(fd, str, strlen(str));
 	*/
-	str = "$PMTK314,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0*28";
+	str = "$PMTK314,0,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0*28";
 	write(fd, str, strlen(str));
 
 	str = "$PMTK313,1*2E\r\n";
@@ -107,25 +122,61 @@ void *gps(void * args)
 	sleep(8);
 	//set_interface_attribs (fd, B38400, 0);  // set speed to 115,200 bps, 8n1 (no parity)
    struct timespec tt = {
-               .tv_sec = 0,        /* seconds */
+               .tv_sec = 4,        /* seconds */
                .tv_nsec = 500000000       /* nanoseconds */
            };
+
+   	time_t cycle =  time(NULL) - SGF_SEND_PERIOD + 10*60;
 
 	while(!end_program)
 	{
 		nanosleep(&tt, NULL);
 		
-
-		// Open new file is old one is full
-		if(ftell(fp) > SIZE_MAX_FILE*1024)
+		// Open new file if the old one is full
+		if(ftell(fp) > GPS_SIZE_MAX_FILE*1024)
 		{
 			open_new_file(&fp);
 		}
 
+		//Read data fril serial connection
 		u = read(fd, in_messages, 500);
 
+		// Save data to file
 		for(i=0;i<u;i++)
 			fprintf(fp, "%c", in_messages[i]);
+		
+		// To prevent strtok from overflowing
+		in_messages[499] = '\0';
+
+		// Separate the received data in token separated by "," and "\n"
+		token = strtok((char *) in_messages, ",\n");
+
+		// The format for the gps fix information is:
+		// 	$GPGGA,TIME,LATITUDE,W/E,LONGITUDE,N/S,... 
+		// Every SGF_SEND_PERIOD, find $GPGGA then get LATITUDE and 
+		// LONGITUDE and send them as min and max of id GPS
+		if(difftime(time(NULL), cycle) > SGF_SEND_PERIOD)
+		{
+			while((token = strtok(NULL, ",\n")) != NULL 
+					&& strcmp(token, keyword));
+			if(token)
+			{
+				if(strtok(NULL, ",") != NULL &&
+						(token = strtok(NULL, ",")) != NULL)
+					data.min = strtof(token, NULL);
+				if(strtok(NULL, ",") != NULL &&
+						(token = strtok(NULL, ",")) != NULL)
+					data.max = strtof(token, NULL);
+				if(token != NULL)
+				{
+					if(alive[SGF] == 1)
+						pthread_create(&thread_sgf, &attr,
+								send_sigfox, 
+								(void*) &data);
+					cycle = time(NULL);
+				}
+			}
+		}
 	}
 	fclose(fp);
 	close (fd);

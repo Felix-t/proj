@@ -60,7 +60,6 @@ static uint8_t get_usb_config(config_t *cfg)
 
 	char *cfg_path = "PATH_USB_STICK";
 	const char *usb_key_config[1];
-	printf("%s\n", "abcd");
 	config_lookup_string(cfg, cfg_path, usb_key_config);
 
 	strncpy(path, usb_key_config[0], 100);
@@ -113,7 +112,6 @@ uint8_t get_cfg_double(double *values, char **str, int32_t str_nb)
 
 	for(i = 0; i<str_nb; i++)
 	{
-		printf("%s\n", str[i]);
 		config_lookup_float(&config, str[i], &values[i]);
 
 	}
@@ -233,6 +231,7 @@ static uint8_t valid_config(char * path)
 		return 1;
 	}
 
+	return 0;
 }
 
 

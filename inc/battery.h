@@ -10,7 +10,7 @@
 #define CH_NUM 0
 #define NB_MEASURES 100
 #define MEASURE_FREQUENCY 100 	//X every sec
-#define INTERVAL 30 		//Between each series of data
+#define INTERVAL 120 		//Between each series of data
 
 #define PATH_VOLT_LOGS "logs/tension.txt"
 #define NB_CFG_BATTERY 5

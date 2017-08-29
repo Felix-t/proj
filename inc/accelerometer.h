@@ -123,11 +123,14 @@
 
 //TTS between each measure : change this depending on the output datarate
 //setup in the hardware
-#define INPUT_DATA_RATE		50 //Hz	
+#define INPUT_DATA_RATE		100 //Hz	
+#define WRITE_DATA_NSEC		8000000.0
 
+// Percentage of range above which the scale needs to be changed
 #define UP_SCALE 		0.90
-#define DOWN_SCALE 		0.05 //useless
 
+// minimum time between a change of scale and the next possible downscale, in s
+#define DOWNSCALE_TIME		60
 #define QUEUE_SIZE 		50 // number max of data not printed
 #define INTERVAL_CALC_SCALE 	10 //seconds
 #define NB_MEASURES_INTERVAL	QUEUE_SIZE*INTERVAL_CALC_SCALE

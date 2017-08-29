@@ -1,0 +1,13 @@
+You need to have everything installed before changing these files.
+See doc for more information
+You probably want to backup the files you change
+
+
+Installation process :
+Copy 10-local.rules to /etc/udev/rules.d/
+Move (or change your current) /etc/dnsmasq.conf
+Move (or change your current) /etc/network/interfaces
+Move wifi_control.service and acq_surffeol.service to /lib/systemd/system/
+  You may need to run sudo systemctl enable acq_surffeol/wifi_control
+Move (or change your current) /etc/init.d/wittypi
+reboot

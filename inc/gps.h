@@ -5,6 +5,8 @@
 
 #define GPS_PORT "/dev/GPS"
 
+#define GPS_SIZE_MAX_FILE 50000
+
 void *gps(void * args);
 
 

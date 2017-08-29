@@ -39,10 +39,10 @@
 
 // Interval of time during which every data has been sent through sigfox network
 // = 2 messages (mean/dev & min/max) per used identity, * SGF_INTERVAL
-#define SGF_SEND_PERIOD SGF_INTERVAL*2*(2*WLX2_ENABLE + 6*LSM9DS0_ENABLE + 3*LSM9DS0_MAG_ENABLE)
+#define SGF_SEND_PERIOD SGF_INTERVAL*2*((2*WLX2_ENABLE) + (6*LSM9DS0_ENABLE) + (3*LSM9DS0_MAG_ENABLE) + (GPS_ENABLE))
 
 // Maximum file size in ko for accelerometer and gps acquisition
-#define SIZE_MAX_FILE 		5000
+#define SIZE_MAX_FILE 		50000
 
 #define NB_IDENTITY 14
 

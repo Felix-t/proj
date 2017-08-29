@@ -539,6 +539,7 @@ int Send_command_and_receive_answer_2(struct parametres_connexion *param_connect
 	{
 		strncat(answer[0], param_SC_RA.answer[0], _RECEIVE_BUFF_SIZE);
 		strncat(answer[1], param_SC_RA.answer[1], _RECEIVE_BUFF_SIZE);
+		return 1;
  	}
 
  	sleep(0.1);
@@ -580,7 +581,7 @@ int Send_command_and_receive_answer_2(struct parametres_connexion *param_connect
 	}
 
 	*/
-	return ok;
+	return 0;
 
 }
 
@@ -882,12 +883,12 @@ int Test_connexion(struct parametres_connexion *param_connection, int ok_print)
 	char answer_attendu_by_channel[NB_CH][100];
 	memcpy(answer_attendu_by_channel[0],
 			param_connection->module_idn, 100);
-	strcat(answer_attendu_by_channel[0], "-01");
+	//strcat(answer_attendu_by_channel[0], "-01");
 	if(NB_CH > 1)
 	{
 		memcpy(answer_attendu_by_channel[1], 
 				param_connection->module_idn, 100);
-		strcat(answer_attendu_by_channel[1], "-02");
+		//strcat(answer_attendu_by_channel[1], "-02");
 	}
 	//struct public_response_scpi answer;
 	char answer[_RECEIVE_BUFF_SIZE] = {0};
@@ -928,7 +929,7 @@ int Test_connexion(struct parametres_connexion *param_connection, int ok_print)
 			}
 		}
 	}
-	printf("make and test ok = %i", ok);
+	printf("make and test ok = %i\n", ok);
 	return ok;
 }
 
